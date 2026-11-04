@@ -4,10 +4,12 @@
  */
 import { createArena, rayMech, type Arena, type ArenaLayout, type HitZone } from '../src/shared/arena.ts';
 import { isPalette, type MechPalette } from '../src/shared/palette.ts';
-import { normalizeParts, type MechPartConfig } from '../src/shared/customization.ts';
-import { MODE_RULES, type ClientMessage, type InputFrame, type MapId, type MatchPhase, type MissileSnap, type OnlineMode, type PlayerInfo, type PlayerSnap, type ServerMessage, type Team } from '../src/shared/protocol.ts';
-import { aimOrigin, applyPartDamage, applyShotCost, createMechState, damageTaken, MOVE, stepMech, switchWeapon, weaponOperational, type MechState } from '../src/shared/sim.ts';
+import { validateParts, type MechPartConfig } from '../src/shared/customization.ts';
+import { BOT_FILL, CORE_RULES, MODE_RULES, isTeamMode, type ClientMessage, type CoreState, type InputFrame, type MapId, type MatchPhase, type MissileSnap, type OnlineMode, type PlayerInfo, type PlayerSnap, type ServerMessage, type Team } from '../src/shared/protocol.ts';
+import { aimOrigin, applyPartDamage, applyShotCost, createMechState, damageTaken, energyCost, MOVE, stepMech, switchWeapon, weaponOperational, type MechState } from '../src/shared/sim.ts';
 import { WEAPONS, damageAtDistance, isWeaponId, laserDamage, laserEnergy, meleeDamage, meleeInArc, spreadDirections, type WeaponId } from '../src/shared/weapons.ts';
+
+import { BotBrain, BotNav } from './bots.ts';
 
 type Vec = { x: number; y: number; z: number };
 
@@ -37,6 +39,7 @@ interface Player {
   history: Array<{ t: number; x: number; y: number; z: number }>;
   charge: number;
   lastHitBy: number;
+  brain?: BotBrain;
 }
 
 interface Missile { id: number; owner: number; pos: Vec; vel: Vec; target: number | null; ttl: number }
@@ -57,6 +60,11 @@ export class Room {
   private soloTime = 0;
   private teamScores: [number, number] = [0, 0];
   private coreOwner: Team = null;
+  private coreState: CoreState = 'neutral';
+  /** -1 = fully blue, +1 = fully orange. */
+  private coreProgress = 0;
+  private botNav: BotNav | null = null;
+  private botNames = 0;
 
   readonly code: string;
   readonly mode: OnlineMode;
@@ -73,29 +81,42 @@ export class Room {
   }
 
   get rules() { return MODE_RULES[this.mode]; }
-  get full(): boolean { return this.players.size >= this.rules.maxPlayers; }
+  /** Humans only: bots always give their seat to a human. */
+  get humans(): number { return [...this.players.values()].filter((p) => !p.bot).length; }
+  get full(): boolean { return this.humans >= this.rules.maxPlayers; }
   get empty(): boolean { return ![...this.players.values()].some((p) => !p.bot); }
 
-  private info(p: Player): PlayerInfo { return { id: p.id, name: p.name, palette: p.palette, weapon: p.state.weapon, team: p.team, parts: p.parts }; }
+  private info(p: Player): PlayerInfo { return { id: p.id, name: p.name, palette: p.palette, weapon: p.state.weapon, team: p.team, parts: p.parts, bot: p.bot }; }
   private sameTeam(a: Player | undefined, b: Player): boolean { return !!a?.team && a.team === b.team; }
 
   private broadcast(message: ServerMessage, except?: number): void {
     for (const p of this.players.values()) if (p.id !== except) p.conn.send(message);
   }
 
-  join(conn: Connection, name: string, palette: unknown, weapon: unknown, parts?: unknown): Player {
-    if (this.full) {
-      const bot = [...this.players.values()].find((p) => p.bot);
-      if (bot) this.leave(bot.id);
+  private teamCount(team: Team, humansOnly = false): number {
+    return [...this.players.values()].filter((p) => p.team === team && (!humansOnly || !p.bot)).length;
+  }
+
+  join(conn: Connection, name: string, palette: unknown, weapon: unknown, parts?: unknown, asBot = false, forcedTeam?: Team): Player {
+    // Humans go to the team with fewer humans (then fewer pilots); a bot of that team gives up its seat.
+    let team: Team = null;
+    if (isTeamMode(this.mode)) {
+      if (forcedTeam) team = forcedTeam;
+      else {
+        const bh = this.teamCount('blue', true), oh = this.teamCount('orange', true);
+        team = bh < oh ? 'blue' : oh < bh ? 'orange' : this.teamCount('blue') <= this.teamCount('orange') ? 'blue' : 'orange';
+      }
+    }
+    if (!asBot) {
+      const seat = [...this.players.values()].find((p) => p.bot && (!team || p.team === team)) ?? [...this.players.values()].find((p) => p.bot);
+      if (seat && (this.players.size >= this.rules.maxPlayers || this.players.size >= BOT_FILL[this.mode])) this.leave(seat.id);
     }
     const spawn = this.pickSpawn(-1);
-    const blue = [...this.players.values()].filter((p) => p.team === 'blue').length;
-    const orange = [...this.players.values()].filter((p) => p.team === 'orange').length;
-    const team: Team = this.mode === 'ffa' || this.mode === 'duel' ? null : blue <= orange ? 'blue' : 'orange';
     const player: Player = {
-      id: nextPlayerId++, bot: false, team, conn, name, palette: team === 'blue' ? 'arctic' : team === 'orange' ? 'ember' : isPalette(palette) ? palette : 'arctic',
-      parts: normalizeParts(parts),
-      state: createMechState(spawn.x, spawn.y, spawn.z, spawn.yaw, isWeaponId(weapon) ? weapon : 'mg'),
+      id: nextPlayerId++, bot: asBot, team, conn, name, palette: team === 'blue' ? 'arctic' : team === 'orange' ? 'ember' : isPalette(palette) ? palette : 'arctic',
+      // The server recomputes every stat from the part ids; overloaded builds are reset.
+      parts: validateParts(parts, isWeaponId(weapon) ? weapon : 'mg'),
+      state: createMechState(spawn.x, spawn.y, spawn.z, spawn.yaw, isWeaponId(weapon) ? weapon : 'mg', validateParts(parts, isWeaponId(weapon) ? weapon : 'mg')),
       alive: true, respawnAt: 0, kills: 0, deaths: 0, score: 0, ping: 0, inputs: [], ack: 0, budget: 0.1, history: [], charge: 0, lastHitBy: -1,
     };
     player.state.invulnerable = 1.5;
@@ -116,29 +137,60 @@ export class Room {
     if (this.players.size < 2 && this.phase === 'playing') this.endMatch();
   }
 
-  private addBot(): void {
+  private addBot(team: Team): void {
     const noop: Connection = { send() {}, close() {} };
-    const bot = this.join(noop, 'BOT SENTINELA', 'ember', 'mg');
-    bot.bot = true;
+    const names = ['VÉRTICE', 'BIGORNA', 'FAÍSCA', 'CORVO', 'GRANITO', 'ÓRBITA', 'TROVÃO', 'ESPORA', 'PRISMA', 'FERRUGEM'];
+    const weapons: WeaponId[] = ['mg', 'shotgun', 'missile', 'mg'];
+    const families = ['scout', 'striker', 'titan', 'vanguard', 'ronin', 'tempest'] as const;
+    const fam = families[this.botNames % families.length];
+    const bot = this.join(noop, `BOT ${names[this.botNames++ % names.length]}`, 'ember', weapons[this.botNames % weapons.length], { head: fam, torso: fam, legs: fam }, true, team);
+    bot.brain = new BotBrain();
+  }
+
+  /** Public rooms: fill to BOT_FILL pilots with bots, keeping both teams the same size. */
+  private balanceBots(): void {
+    if (this.isPrivate || this.humans === 0 || this.phase === 'ended') return;
+    const target = Math.min(BOT_FILL[this.mode], this.rules.maxPlayers);
+    if (isTeamMode(this.mode)) {
+      const per = Math.ceil(target / 2);
+      for (const team of ['blue', 'orange'] as const) {
+        while (this.teamCount(team) < per) this.addBot(team);
+        while (this.teamCount(team) > per) {
+          const bot = [...this.players.values()].find((p) => p.bot && p.team === team);
+          if (!bot) break;
+          this.leave(bot.id);
+        }
+      }
+    } else {
+      while (this.players.size < target) this.addBot(null);
+      while (this.players.size > target) {
+        const bot = [...this.players.values()].find((p) => p.bot);
+        if (!bot) break;
+        this.leave(bot.id);
+      }
+    }
   }
 
   private stepBots(dt: number): void {
+    if (![...this.players.values()].some((p) => p.bot)) return;
+    this.botNav ??= new BotNav(this.arena);
+    const t = now();
+    const spawns = this.arena.spawnPoints.map((p) => ({ x: p.x, z: p.z }));
     for (const bot of this.players.values()) {
-      if (!bot.bot || !bot.alive) continue;
-      const target = [...this.players.values()].filter((p) => !p.bot && p.alive && !this.sameTeam(bot, p))
-        .sort((a, b) => Math.hypot(a.state.x - bot.state.x, a.state.z - bot.state.z) - Math.hypot(b.state.x - bot.state.x, b.state.z - bot.state.z))[0];
-      if (!target) continue;
-      const dx = target.state.x - bot.state.x, dz = target.state.z - bot.state.z;
-      const distance = Math.hypot(dx, dz);
-      const yaw = Math.atan2(dx, dz);
-      const pitch = -Math.atan2(target.state.y - bot.state.y, Math.max(1, distance));
-      stepMech(bot.state, { mx: distance < 8 ? Math.sin(now() * 0.8) * 0.6 : 0, mz: distance > 5 ? 1 : 0, yaw, pitch, sprint: distance > 12, jump: false, dash: false, shield: bot.state.health < 45 && bot.state.shieldCd <= 0 }, dt, this.arena);
-      if (distance < 42 && this.arena.lineOfSight({ x: bot.state.x, y: bot.state.y + 2.1, z: bot.state.z }, { x: target.state.x, y: target.state.y + 1.7, z: target.state.z })) {
-        const o = aimOrigin(bot.state);
-        const aim = { x: target.state.x - o.x, y: target.state.y + 1.7 - o.y, z: target.state.z - o.z };
-        this.fire(bot, { t: 'fire', weapon: bot.state.weapon, o: [o.x, o.y, o.z], d: [aim.x, aim.y, aim.z], charge: 1, seed: (Math.random() * 0xffffffff) >>> 0, rt: now() });
-      }
+      if (!bot.bot || !bot.alive || !bot.brain || this.phase === 'ended') continue;
+      const enemies = [...this.players.values()].filter((p) => p !== bot && p.alive && !this.sameTeam(bot, p) && p.state.invulnerable <= 0).map((p) => ({ id: p.id, state: p.state }));
+      const needCore = this.mode === 'core' && (this.coreOwner !== bot.team || this.coreState === 'contested');
+      const objective = needCore ? { x: CORE_RULES.x + (Math.random() - 0.5) * 4, z: CORE_RULES.z + (Math.random() - 0.5) * 4 } : null;
+      const decision = bot.brain.decide(bot.state, { arena: this.arena, nav: this.botNav, time: t, enemies, objective, spawns });
+      if (this.phase === 'countdown') { decision.input.mx = decision.input.mz = 0; decision.input.jump = false; }
+      stepMech(bot.state, decision.input, dt, this.arena);
+      if (decision.fire && this.phase !== 'countdown') this.fire(bot, { t: 'fire', ...decision.fire, seed: (Math.random() * 0xffffffff) >>> 0, rt: t });
     }
+  }
+
+  /** Debug/test view of bots. */
+  botStatus(): Array<{ id: number; name: string; team: Team; mode: string; stuck: number; x: number; z: number; alive: boolean }> {
+    return [...this.players.values()].filter((p) => p.bot).map((p) => ({ id: p.id, name: p.name, team: p.team, mode: p.brain?.mode ?? '', stuck: p.brain?.stuckEvents ?? 0, x: round(p.state.x), z: round(p.state.z), alive: p.alive }));
   }
 
   handle(id: number, message: ClientMessage): void {
@@ -205,10 +257,10 @@ export class Room {
     const s = p.state;
     if (msg.weapon !== s.weapon) switchWeapon(s, msg.weapon);
     const def = WEAPONS[msg.weapon];
-    if (s.fireCd > 0.08 || !weaponOperational(s) || (def.kind !== 'charge' && s.overheated) || (def.kind === 'melee' && s.energy < def.energy)) return;
+    if (s.fireCd > 0.08 || !weaponOperational(s) || (def.kind !== 'charge' && s.overheated) || (def.kind === 'melee' && s.energy < energyCost(s, def.energy))) return;
     const charge = clampNum(msg.charge, 0, 1);
     if (def.kind === 'charge') {
-      const cost = laserEnergy(charge);
+      const cost = energyCost(s, laserEnergy(charge));
       if (s.energy < cost * 0.6) return;
       s.energy = Math.max(0, s.energy - cost);
       s.energyDelay = MOVE.energyDelay;
@@ -295,9 +347,9 @@ export class Room {
 
   private impact(p: Player, rt: number): void {
     const s = p.state;
-    if (!p.alive || !this.canFight() || s.impactCd > 0 || s.energy < MOVE.impactCost) return;
+    if (!p.alive || !this.canFight() || s.impactCd > 0 || s.energy < energyCost(s, MOVE.impactCost)) return;
     s.impactCd = MOVE.impactCooldown;
-    s.energy -= MOVE.impactCost;
+    s.energy -= energyCost(s, MOVE.impactCost);
     s.energyDelay = MOVE.energyDelay;
     const fx = Math.sin(s.yaw), fz = Math.cos(s.yaw);
     s.pushX += fx * 9;
@@ -332,9 +384,9 @@ export class Room {
     victim.respawnAt = now() + 3;
     victim.inputs.length = 0;
     const killer = attacker && attacker.id !== victim.id ? attacker : undefined;
-    if (killer) { killer.kills++; killer.score += 100; if (killer.team) this.teamScores[killer.team === 'blue' ? 0 : 1]++; }
+    if (killer) { killer.kills++; killer.score += 100; if (killer.team && this.mode !== 'core') this.teamScores[killer.team === 'blue' ? 0 : 1]++; }
     this.broadcast({ t: 'kill', killer: killer?.id ?? victim.id, victim: victim.id, weapon });
-    if (killer && this.phase === 'playing' && (killer.team ? this.teamScores[killer.team === 'blue' ? 0 : 1] : killer.kills) >= this.rules.fragLimit) this.endMatch();
+    if (killer && this.phase === 'playing' && this.mode !== 'core' && (killer.team ? this.teamScores[killer.team === 'blue' ? 0 : 1] : killer.kills) >= this.rules.fragLimit) this.endMatch();
   }
 
   private explode(at: Vec, radius: number, damage: number, owner: number, direct?: Player): void {
@@ -408,7 +460,7 @@ export class Room {
 
   private respawn(p: Player): void {
     const s = this.pickSpawn(p.id);
-    p.state = createMechState(s.x, s.y, s.z, s.yaw, p.state.weapon);
+    p.state = createMechState(s.x, s.y, s.z, s.yaw, p.state.weapon, p.parts);
     p.state.invulnerable = 1.5;
     p.alive = true;
     p.inputs.length = 0;
@@ -424,30 +476,49 @@ export class Room {
 
   private ranking() {
     return [...this.players.values()]
-      .map((p) => ({ id: p.id, name: p.name, kills: p.kills, deaths: p.deaths, score: p.score, team: p.team }))
+      .map((p) => ({ id: p.id, name: p.name, kills: p.kills, deaths: p.deaths, score: p.score, team: p.team, bot: p.bot }))
       .sort((a, b) => (b.team ? this.teamScores[b.team === 'blue' ? 0 : 1] : b.kills) - (a.team ? this.teamScores[a.team === 'blue' ? 0 : 1] : a.kills) || b.kills - a.kills || a.deaths - b.deaths || b.score - a.score);
+  }
+
+  /** Match outcome: every member of the winning team wins; equal scores are a draw. */
+  outcome(): { winnerTeam?: Team | 'draw'; winnerId?: number | null } {
+    if (isTeamMode(this.mode)) {
+      const [b, o] = this.teamScores.map((v) => Math.floor(v));
+      return { winnerTeam: b > o ? 'blue' : o > b ? 'orange' : 'draw' };
+    }
+    const ranked = this.ranking();
+    const top = ranked[0];
+    if (!top) return { winnerId: null };
+    const tie = ranked[1] && ranked[1].kills === top.kills && ranked[1].deaths === top.deaths;
+    return { winnerId: tie ? null : top.id };
   }
 
   private endMatch(): void {
     if (this.phase === 'ended') return;
     this.missiles.length = 0;
-    this.setPhase('ended', 10, this.ranking());
+    const result = this.outcome();
+    this.phase = 'ended';
+    this.timer = 10;
+    this.broadcast({ t: 'phase', phase: 'ended', timer: 10, ranking: this.ranking(), ...result, teamScores: [Math.floor(this.teamScores[0]), Math.floor(this.teamScores[1])] });
   }
 
   private startMatch(): void {
     this.missiles.length = 0;
     this.teamScores = [0, 0];
     this.coreOwner = null;
+    this.coreState = 'neutral';
+    this.coreProgress = 0;
     for (const p of this.players.values()) { p.kills = p.deaths = p.score = 0; this.respawn(p); }
     this.setPhase('playing', this.rules.timeLimit);
   }
 
   tick(dt: number): void {
     const t = now();
-    if (!this.isPrivate && this.players.size === 1 && !this.empty && this.phase === 'waiting') {
-      this.soloTime += dt;
-      if (this.soloTime >= 2.5) { this.soloTime = 0; this.addBot(); }
-    } else this.soloTime = 0;
+    // Give a lone human 2.5 s for friends to arrive, then fill and keep teams balanced with bots.
+    if (!this.isPrivate && !this.empty) {
+      if (this.players.size > 1 || this.soloTime >= 2.5) this.balanceBots();
+      else this.soloTime += dt;
+    }
     this.stepBots(dt);
     for (const p of this.players.values()) {
       this.processInputs(p, dt);
@@ -460,14 +531,7 @@ export class Room {
       this.timer -= dt;
       if (this.timer <= 0) this.startMatch();
     } else if (this.phase === 'playing') {
-      if (this.mode === 'core') {
-        const onCore = [...this.players.values()].filter((p) => p.alive && Math.hypot(p.state.x, p.state.z) < 8 && p.team);
-        const blue = onCore.filter((p) => p.team === 'blue').length;
-        const orange = onCore.filter((p) => p.team === 'orange').length;
-        this.coreOwner = blue > 0 && orange === 0 ? 'blue' : orange > 0 && blue === 0 ? 'orange' : null;
-        if (this.coreOwner) this.teamScores[this.coreOwner === 'blue' ? 0 : 1] += dt * 2;
-        if (Math.max(...this.teamScores) >= this.rules.fragLimit) this.endMatch();
-      }
+      if (this.mode === 'core') this.updateCore(dt);
       this.timer -= dt;
       if (this.timer <= 0) this.endMatch();
     } else if (this.phase === 'ended') {
@@ -478,6 +542,28 @@ export class Room {
       }
     }
     this.snapshot(t);
+  }
+
+  /** True when a pilot stands on the core floor itself (not on a crate, jet or another level). */
+  onCore(p: Player): boolean {
+    const s = p.state;
+    return p.alive && Math.hypot(s.x - CORE_RULES.x, s.z - CORE_RULES.z) <= CORE_RULES.radius && s.y - this.arena.deckY <= CORE_RULES.maxHeight && s.grounded;
+  }
+
+  private updateCore(dt: number): void {
+    const present = [...this.players.values()].filter((p) => p.team && this.onCore(p));
+    const blue = present.filter((p) => p.team === 'blue').length;
+    const orange = present.filter((p) => p.team === 'orange').length;
+    if (blue && orange) this.coreState = 'contested';
+    else {
+      const push = blue ? -1 : orange ? 1 : 0;
+      if (push) this.coreProgress = Math.max(-1, Math.min(1, this.coreProgress + push * dt / CORE_RULES.captureTime));
+      if (this.coreProgress <= -1) this.coreOwner = 'blue';
+      if (this.coreProgress >= 1) this.coreOwner = 'orange';
+      this.coreState = this.coreOwner ?? 'neutral';
+    }
+    if (this.coreOwner) this.teamScores[this.coreOwner === 'blue' ? 0 : 1] += dt * CORE_RULES.pointsPerSecond;
+    if (Math.max(...this.teamScores) >= this.rules.fragLimit) this.endMatch();
   }
 
   private snapshot(t: number): void {
@@ -491,7 +577,7 @@ export class Room {
     });
     const missiles: MissileSnap[] = this.missiles.map((m) => ({ id: m.id, x: round(m.pos.x), y: round(m.pos.y), z: round(m.pos.z), vx: round(m.vel.x), vy: round(m.vel.y), vz: round(m.vel.z) }));
     for (const p of this.players.values()) {
-      p.conn.send({ t: 'snap', time: t, ack: p.ack, phase: this.phase, timer: Math.max(0, this.timer), me: p.alive ? p.state : null, players, missiles, teamScores: [round(this.teamScores[0]), round(this.teamScores[1])], coreOwner: this.coreOwner });
+      p.conn.send({ t: 'snap', time: t, ack: p.ack, phase: this.phase, timer: Math.max(0, this.timer), me: p.alive ? p.state : null, players, missiles, teamScores: [round(this.teamScores[0]), round(this.teamScores[1])], coreOwner: this.coreOwner, coreState: this.coreState, coreProgress: round(this.coreProgress) });
     }
   }
 }

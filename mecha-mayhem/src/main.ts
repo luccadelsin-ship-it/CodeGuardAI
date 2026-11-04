@@ -11,6 +11,7 @@ import { MODE_RULES, type OnlineMode } from './shared/protocol';
 import { WEAPONS, WEAPON_ORDER, isWeaponId, type WeaponId } from './shared/weapons';
 import { PART_STYLES, normalizeParts, type MechPartConfig } from './shared/customization';
 import { MAPS, MAP_ORDER, mapFromSearch, type MapId } from './shared/maps';
+import { FAMILIES, FAMILY_ORDER, computeLoadout, type FamilyId } from './shared/parts';
 import './style.css';
 
 const el = <T extends HTMLElement = HTMLElement>(id: string): T => {
@@ -109,20 +110,73 @@ function buildLobby(): void {
   refreshLoadout();
 }
 
-function bindPartCustomization(): void {
-  try { partConfig = normalizeParts(JSON.parse(loadSetting('parts', '{}'))); } catch { partConfig = normalizeParts(null); }
-  for (const part of ['head', 'torso', 'legs'] as const) {
-    const select = el<HTMLSelectElement>(`part-${part}`);
-    select.replaceChildren(...PART_STYLES.map((style) => new Option(style.name, style.id)));
-    select.value = partConfig[part];
-    select.addEventListener('change', () => {
-      partConfig = normalizeParts({ ...partConfig, [part]: select.value });
-      game.player.setParts(partConfig);
+type CatalogPart = { id: string; category: string; image: string; imageStatus: string; modelStatus: string };
+let catalogParts: CatalogPart[] = [];
+let activeSlot: 'head' | 'torso' | 'legs' = 'head';
+const slotCategory = { head: 'heads', torso: 'torsos', legs: 'legs' } as const;
+
+function partImage(slot: 'head' | 'torso' | 'legs', family: FamilyId): string | null {
+  const entry = catalogParts.find((p) => p.id === `${slotCategory[slot]}-${family}`);
+  return entry && entry.imageStatus === 'ready' ? entry.image : null;
+}
+
+function renderPartGrid(): void {
+  const grid = el('part-grid');
+  grid.replaceChildren();
+  for (const id of FAMILY_ORDER) {
+    const fam = FAMILIES[id];
+    const button = document.createElement('button');
+    button.className = `part-card${partConfig[activeSlot] === id ? ' active' : ''}`;
+    button.dataset.family = id;
+    button.style.setProperty('--fam', fam.accent);
+    const img = partImage(activeSlot, id);
+    button.innerHTML = `${img ? `<img src="${img}" alt="" loading="lazy" />` : '<span class="part-missing">REF. PENDENTE</span>'}<strong>${fam.name}</strong>`;
+    button.title = fam.detail;
+    button.addEventListener('click', () => {
+      partConfig = normalizeParts({ ...partConfig, [activeSlot]: id });
+      game.setChassis(partConfig);
       saveSetting('parts', JSON.stringify(partConfig));
+      renderParts();
       refreshLoadout();
     });
+    grid.append(button);
   }
-  game.player.setParts(partConfig);
+}
+
+function renderChassisStats(): void {
+  const lo = computeLoadout(partConfig, game.currentWeapon);
+  const slot = FAMILIES[partConfig[activeSlot]];
+  const part = slot[activeSlot];
+  const img = partImage(activeSlot, partConfig[activeSlot]);
+  el('part-preview').innerHTML = `${img ? `<img src="${img}" alt="Referência ${slot.name}" />` : '<span class="part-missing big">IMAGEM DE REFERÊNCIA PENDENTE</span>'}<div><span class="eyebrow">${activeSlot === 'head' ? 'CABEÇA' : activeSlot === 'torso' ? 'TRONCO + BRAÇOS' : 'PERNAS'}</span><strong>${slot.name}</strong><small>${slot.detail}</small><dl><dt>PESO</dt><dd>${part.weight} kg</dd><dt>SUSTENTA</dt><dd>${part.support} kg</dd><dt>INTEGRIDADE</dt><dd>${part.durability}</dd><dt>BLINDAGEM</dt><dd>${part.armor}%</dd>${'energy' in part ? `<dt>ENERGIA</dt><dd>${part.energy}</dd>` : ''}${'speed' in part ? `<dt>VELOCIDADE</dt><dd>${part.speed} m/s</dd>` : ''}</dl></div>`;
+  const pct = (v: number) => Math.round(v * 100);
+  const bar = (label: string, load: number, cap: number) => {
+    const ratio = load / cap;
+    return `<div class="load-row${ratio > 1.35 ? ' over' : ratio > 1 ? ' warn' : ''}"><span>${label}</span><div class="load-bar"><i style="width:${Math.min(100, ratio / 1.35 * 100)}%"></i><em></em></div><b>${load} / ${cap} kg · ${pct(ratio)}%</b></div>`;
+  };
+  const status = lo.rejected ? `<p class="load-status over">EXCEDE O LIMITE (${pct(lo.load)}% &gt; 135%): troque por pernas/tronco mais fortes ou uma arma mais leve.</p>`
+    : lo.overloaded ? `<p class="load-status warn">SOBRECARGA ${pct(lo.load)}%: velocidade −${Math.round((1 - Math.max(0.55, 1 - (lo.load - 1) * 1.15)) * 100)}%, pulo −${Math.round((1 - lo.jumpMul) * 100)}%, energia +${Math.round((lo.load - 1) * 150)}% mais cara.</p>`
+    : `<p class="load-status ok">CARGA OK (${pct(lo.load)}%) · sem penalidades.</p>`;
+  el('chassis-stats').innerHTML = `<div class="stat-grid"><div><span>PESO TOTAL</span><b>${lo.weight} kg</b></div><div><span>INTEGRIDADE</span><b>${lo.durability}</b></div><div><span>BLINDAGEM</span><b>${lo.armor}%</b></div><div><span>ENERGIA</span><b>${lo.energyCapacity}</b></div><div><span>VELOCIDADE</span><b>${lo.speed} m/s</b></div><div><span>DANO RECEBIDO</span><b>${Math.round(lo.damageMul * 100)}%</b></div></div>${bar('PERNAS', lo.legsLoad, lo.legsCapacity)}${bar('TRONCO', lo.torsoLoad, lo.torsoCapacity)}${status}`;
+  for (const id of ['garage-play', 'lobby-launch'] as const) {
+    const button = document.getElementById(id) as HTMLButtonElement | null;
+    if (button) { button.disabled = lo.rejected; button.title = lo.rejected ? 'Chassi acima do limite de carga' : ''; }
+  }
+  for (const s of ['head', 'torso', 'legs'] as const) el(`tab-${s}`).textContent = FAMILIES[partConfig[s]].name;
+}
+
+function renderParts(): void { renderPartGrid(); renderChassisStats(); }
+
+function bindPartCustomization(): void {
+  try { partConfig = normalizeParts(JSON.parse(loadSetting('parts', '{}'))); } catch { partConfig = normalizeParts(null); }
+  document.querySelectorAll<HTMLButtonElement>('.part-tab').forEach((tab) => tab.addEventListener('click', () => {
+    activeSlot = tab.dataset.slot as typeof activeSlot;
+    document.querySelectorAll('.part-tab').forEach((t) => t.classList.toggle('active', t === tab));
+    renderParts();
+  }));
+  game.setChassis(partConfig);
+  renderParts();
+  void fetch('/assets/modular/catalog.json').then((r) => r.json()).then((c: { parts: CatalogPart[] }) => { catalogParts = c.parts; renderParts(); }).catch(() => { /* images are optional */ });
 }
 
 function toast(message: string): void {
@@ -369,6 +423,7 @@ function selectWeapon(id: WeaponId): void {
   saveSetting('weapon', id);
   el<HTMLSelectElement>('lobby-weapon').value = id;
   document.querySelectorAll('.weapon-card').forEach((card) => card.classList.toggle('active', (card as HTMLElement).dataset.weapon === id));
+  if (document.getElementById('chassis-stats')) renderChassisStats();
   const def = WEAPONS[id];
   const bar = (label: string, value: number) => `<div class="stat"><span>${label}</span><div><i style="width:${value}%"></i></div></div>`;
   el('weapon-detail').innerHTML = `<p>${def.description}</p>${bar('DANO', def.stats.damage)}${bar('CADÊNCIA', def.stats.rate)}${bar('ALCANCE', def.stats.range)}${bar('CONTROLE', def.stats.control)}`;
@@ -424,7 +479,10 @@ async function joinOnline(mode: OnlineMode, room?: string, create?: boolean): Pr
 }
 
 function bindUI(): void {
-  const startTraining = () => { game.leaveSession(); online = null; show('game'); game.start(); };
+  const startTraining = () => {
+    if (computeLoadout(partConfig, game.currentWeapon).rejected) { toast('CHASSI ACIMA DO LIMITE DE CARGA · AJUSTE NA OFICINA'); game.setMode('garage'); show('garage'); renderParts(); return; }
+    game.leaveSession(); online = null; show('game'); game.start();
+  };
   const toMenu = () => { game.leaveSession(); online = null; game.setMode('menu'); show('menu'); };
   el('start-button').addEventListener('click', startTraining);
   el('lobby-button').addEventListener('click', openLobby);

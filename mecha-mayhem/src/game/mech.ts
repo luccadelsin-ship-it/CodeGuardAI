@@ -18,6 +18,7 @@ import type { WeaponId } from '../shared/weapons';
 import type { MechPalette } from '../shared/palette';
 import type { HitZone } from '../shared/arena';
 import { DEFAULT_PARTS, normalizeParts, type MechPartConfig, type PartStyle } from '../shared/customization';
+import { FAMILIES, type FamilyId } from '../shared/parts';
 import { armorBox, armorSurface } from './armorGraphics';
 
 export type { MechPalette };
@@ -339,13 +340,26 @@ export function createMech(scene: Scene, palette: MechPalette, variant: MechVari
   }
   muzzle.parent = gunMount!;
 
-  // Cosmetic part kits share the articulated rig and fixed combat silhouette.
-  const partKits: Record<keyof MechPartConfig, Record<PartStyle, TransformNode[]>> = {
+  // Chassis kits: each family uses one of three silhouettes (scout/striker/titan),
+  // its own accent and light colours per slot, and a signature helmet detail.
+  type Shape = 'scout' | 'striker' | 'titan';
+  const partKits: Record<keyof MechPartConfig, Record<Shape, TransformNode[]>> = {
     head: { scout: [], striker: [], titan: [] },
     torso: { scout: [], striker: [], titan: [] },
     legs: { scout: [], striker: [], titan: [] },
   };
-  function kit(part: keyof MechPartConfig, style: PartStyle, parent: TransformNode): TransformNode {
+  const slotAccent = {
+    head: material('head-accent', '#E9743A', scene, id),
+    torso: material('torso-accent', '#E9743A', scene, id),
+    legs: material('legs-accent', '#E9743A', scene, id),
+  };
+  const slotLight = {
+    head: material('head-light', '#58DEFF', scene, id, true),
+    torso: material('torso-light', '#58DEFF', scene, id, true),
+    legs: material('legs-light', '#58DEFF', scene, id, true),
+  };
+  allMaterials.push(...Object.values(slotAccent), ...Object.values(slotLight));
+  function kit(part: keyof MechPartConfig, style: Shape, parent: TransformNode): TransformNode {
     const node = new TransformNode(`${id}-${part}-${style}-kit`, scene);
     node.parent = parent;
     partKits[part][style].push(node);
@@ -353,43 +367,71 @@ export function createMech(scene: Scene, palette: MechPalette, variant: MechVari
   }
   const scoutHead = kit('head', 'scout', neck);
   for (const side of [-1, 1]) {
-    cube(`scout-helmet-fin-${side}`, scoutHead, [.09, .28, .58], [side * .38, .61, -.13], armorEdge, [-.35, 0, side * -.32]);
+    cube(`scout-helmet-fin-${side}`, scoutHead, [.09, .28, .58], [side * .38, .61, -.13], slotAccent.head, [-.35, 0, side * -.32]);
     cyl(`scout-antenna-${side}`, scoutHead, .025, .45, [side * .27, .91, -.16], dark);
-    cyl(`scout-antenna-tip-${side}`, scoutHead, .065, .07, [side * .27, 1.15, -.16], glow);
+    cyl(`scout-antenna-tip-${side}`, scoutHead, .065, .07, [side * .27, 1.15, -.16], slotLight.head);
   }
+  const strikerHead = kit('head', 'striker', neck);
+  cube('striker-helmet-ridge', strikerHead, [.12, .1, .42], [0, .64, .08], slotAccent.head, [-.1, 0, 0]);
   const titanHead = kit('head', 'titan', neck);
   cube('titan-helmet-brow', titanHead, [.83, .16, .26], [0, .66, .16], armor);
-  cube('titan-helmet-jaw', titanHead, [.69, .18, .17], [0, .12, .3], armorEdge);
+  cube('titan-helmet-jaw', titanHead, [.69, .18, .17], [0, .12, .3], slotAccent.head);
   for (const side of [-1, 1]) cube(`titan-helmet-ear-${side}`, titanHead, [.20, .42, .45], [side * .44, .38, -.02], armor);
   const scoutTorso = kit('torso', 'scout', body);
   for (const side of [-1, 1]) {
-    cube(`scout-chest-fin-${side}`, scoutTorso, [.13, .67, .14], [side * .69, 1.12, -.29], armorEdge, [0, 0, side * -.32]);
-    cube(`scout-reactor-slat-${side}`, scoutTorso, [.06, .32, .07], [side * .43, 1.0, .55], glow, [0, 0, side * -.25]);
+    cube(`scout-chest-fin-${side}`, scoutTorso, [.13, .67, .14], [side * .69, 1.12, -.29], slotAccent.torso, [0, 0, side * -.32]);
+    cube(`scout-reactor-slat-${side}`, scoutTorso, [.06, .32, .07], [side * .43, 1.0, .55], slotLight.torso, [0, 0, side * -.25]);
   }
+  const strikerTorso = kit('torso', 'striker', body);
+  for (const side of [-1, 1]) cube(`striker-chest-trim-${side}`, strikerTorso, [.08, .44, .06], [side * .55, .95, .47], slotAccent.torso, [0, 0, side * .09]);
   const titanTorso = kit('torso', 'titan', body);
   for (const side of [-1, 1]) {
     cube(`titan-chest-plate-${side}`, titanTorso, [.52, .66, .19], [side * .4, 1.01, .55], armor, [0, 0, side * .10]);
-    cube(`titan-chest-guard-${side}`, titanTorso, [.23, .64, .63], [side * .73, .91, .0], armorEdge);
-    cube(`titan-reactor-vent-${side}`, titanTorso, [.23, .055, .04], [side * .4, .97, .66], dark);
+    cube(`titan-chest-guard-${side}`, titanTorso, [.23, .64, .63], [side * .73, .91, .0], slotAccent.torso);
+    cube(`titan-reactor-vent-${side}`, titanTorso, [.23, .055, .04], [side * .4, .97, .66], slotLight.torso);
   }
   cube('titan-back-armor', titanTorso, [1.08, .76, .3], [0, 1.0, -.58], armor);
   for (const [i, side] of [-1, 1].entries()) {
     const scoutLeg = kit('legs', 'scout', kneePivots[i]);
-    cube(`scout-calf-fin-${side}`, scoutLeg, [.10, .61, .22], [side * .27, -.34, -.13], armorEdge, [.12, 0, side * -.2]);
+    cube(`scout-calf-fin-${side}`, scoutLeg, [.10, .61, .22], [side * .27, -.34, -.13], slotAccent.legs, [.12, 0, side * -.2]);
+    const strikerLeg = kit('legs', 'striker', kneePivots[i]);
+    cube(`striker-shin-trim-${side}`, strikerLeg, [.08, .4, .05], [side * .19, -.36, .33], slotAccent.legs);
     const titanLeg = kit('legs', 'titan', kneePivots[i]);
     cube(`titan-shin-guard-${side}`, titanLeg, [.57, .62, .21], [0, -.31, .35], armor);
-    cube(`titan-knee-guard-${side}`, titanLeg, [.62, .29, .17], [0, .04, .3], armorEdge);
+    cube(`titan-knee-guard-${side}`, titanLeg, [.62, .29, .17], [0, .04, .3], slotAccent.legs);
     cube(`titan-calf-pack-${side}`, titanLeg, [.45, .54, .23], [0, -.32, -.29], dark);
+    cube(`legs-light-${side}`, kneePivots[i] as TransformNode, [.05, .2, .05], [side * .2, -.2, .34], slotLight.legs);
   }
+  // Signature helmet details so every family reads at a glance.
+  const signatures = new Map<FamilyId, TransformNode>();
+  const signature = (family: FamilyId) => { const node = new TransformNode(`${id}-sig-${family}`, scene); node.parent = neck; signatures.set(family, node); return node; };
+  { const n = signature('phantom'); for (const side of [-1, 1]) cube(`phantom-v-${side}`, n, [.07, .38, .07], [side * .11, .78, .2], slotAccent.head, [0, 0, side * .55]); cube('phantom-visor-v', n, [.5, .05, .05], [0, .43, .335], slotLight.head); }
+  { const n = signature('industrial'); for (const y of [.55, .62]) cube(`industrial-cage-${y}`, n, [.72, .04, .06], [0, y, .33], dark); for (const side of [-1, 1]) cyl(`industrial-eye-${side}`, n, .13, .05, [side * .14, .4, .34], slotLight.head, [Math.PI / 2, 0, 0], 12); }
+  { const n = signature('spectre'); for (const side of [-1, 1]) { const ring = MeshBuilder.CreateTorus(`${id}-spectre-ring-${side}`, { diameter: .3, thickness: .04, tessellation: 20 }, scene); ring.parent = n; ring.position.set(side * .47, .39, -.02); ring.rotation.z = Math.PI / 2; ring.material = slotLight.head; ring.isPickable = false; } }
+  { const n = signature('vanguard'); cube('vanguard-brow-plate', n, [.32, .13, .1], [0, .58, .27], material('vanguard-ivory', '#E9E2C8', scene, id)); cyl('vanguard-antenna', n, .03, .55, [.18, .85, -.22], dark); }
+  { const n = signature('ronin'); for (const side of [-1, 1]) cube(`ronin-horn-${side}`, n, [.06, .46, .1], [side * .18, .86, .18], slotAccent.head, [.35, 0, side * -.42]); cube('ronin-crest', n, [.2, .12, .06], [0, .66, .28], slotLight.head); }
+  { const n = signature('warden'); cube('warden-face-slab', n, [.56, .3, .08], [0, .32, .31], slotAccent.head); cube('warden-slit', n, [.36, .03, .03], [0, .41, .36], slotLight.head); }
+  { const n = signature('tempest'); for (const side of [-1, 1]) cube(`tempest-fin-${side}`, n, [.05, .22, .62], [side * .2, .72, -.18], slotAccent.head, [-.5, side * .15, 0]); cube('tempest-crest', n, [.06, .16, .5], [0, .74, -.02], material('tempest-silver', '#C9D3DA', scene, id)); }
   let partConfig: MechPartConfig = { ...DEFAULT_PARTS };
   function setParts(next: MechPartConfig): void {
     partConfig = normalizeParts(next);
     for (const part of ['head', 'torso', 'legs'] as const) {
-      for (const style of ['scout', 'striker', 'titan'] as const) for (const node of partKits[part][style]) node.setEnabled(style === partConfig[part]);
+      const family = FAMILIES[partConfig[part]];
+      for (const style of ['scout', 'striker', 'titan'] as const) for (const node of partKits[part][style]) node.setEnabled(style === family.shape);
+      if (!enemy) {
+        slotAccent[part].diffuseColor = Color3.FromHexString(family.accent);
+        slotAccent[part].specularColor = slotAccent[part].diffuseColor.scale(.5);
+        const light = Color3.FromHexString(family.light);
+        slotLight[part].diffuseColor = light;
+        slotLight[part].emissiveColor = light.scale(.85);
+      }
     }
-    neck.scaling.setAll(partConfig.head === 'scout' ? .91 : partConfig.head === 'titan' ? 1.08 : 1);
-    const legWidth = partConfig.legs === 'scout' ? .88 : partConfig.legs === 'titan' ? 1.10 : 1;
+    for (const [family, node] of signatures) node.setEnabled(family === partConfig.head);
+    const headShape = FAMILIES[partConfig.head].shape, legShape = FAMILIES[partConfig.legs].shape, torsoShape = FAMILIES[partConfig.torso].shape;
+    neck.scaling.setAll(headShape === 'scout' ? .91 : headShape === 'titan' ? 1.08 : 1);
+    const legWidth = legShape === 'scout' ? .88 : legShape === 'titan' ? 1.10 : 1;
     for (const hip of legPivots) hip.scaling.set(legWidth, 1, legWidth);
+    body.scaling.set(torsoShape === 'titan' ? 1.07 : torsoShape === 'scout' ? .94 : 1, 1, torsoShape === 'titan' ? 1.06 : 1);
     root.metadata = { ...(root.metadata ?? {}), parts: { ...partConfig } };
     if (showcaseRoot) setShowcase(showcaseRequested);
   }

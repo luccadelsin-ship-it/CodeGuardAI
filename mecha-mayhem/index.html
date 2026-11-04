@@ -87,8 +87,11 @@
           <div class="garage-section-label">BLINDAGEM</div>
           <div class="swatches"><button class="swatch active" data-color="arctic" style="--swatch:#d9e9f4" aria-label="Branco ártico"><span></span>ÁRTICO</button><button class="swatch" data-color="ember" style="--swatch:#ec702f" aria-label="Laranja"><span></span>EMBER</button><button class="swatch" data-color="phantom" style="--swatch:#7455b9" aria-label="Roxo"><span></span>PHANTOM</button><button class="swatch" data-color="steel" style="--swatch:#8c9aa7" aria-label="Cinza aço"><span></span>STEEL</button></div>
           <div class="garage-section-label">PEÇAS DO ROBÔ <small>VISUAL EM TEMPO REAL</small></div>
-          <div class="part-selectors"><label class="field"><span>CABEÇA</span><select id="part-head" aria-label="Modelo da cabeça"></select></label><label class="field"><span>TRONCO E BRAÇOS</span><select id="part-torso" aria-label="Modelo do tronco"></select></label><label class="field"><span>PERNAS</span><select id="part-legs" aria-label="Modelo das pernas"></select></label></div>
-          <p class="parts-note">Combine peças Scout, Striker e Titan. A configuração fica salva neste navegador.</p>
+          <div class="part-tabs" role="tablist"><button class="part-tab active" data-slot="head" role="tab">CABEÇA <b id="tab-head"></b></button><button class="part-tab" data-slot="torso" role="tab">TRONCO + BRAÇOS <b id="tab-torso"></b></button><button class="part-tab" data-slot="legs" role="tab">PERNAS <b id="tab-legs"></b></button></div>
+          <div class="part-grid" id="part-grid"></div>
+          <div class="part-preview" id="part-preview"></div>
+          <div class="chassis-stats" id="chassis-stats" aria-live="polite"></div>
+          <p class="parts-note">10 famílias × 3 peças. Pernas sustentam cabeça + tronco + arma; o tronco sustenta cabeça + arma. Acima de 100% há sobrecarga (mais lento, pulo menor, energia mais cara); acima de 135% o chassi não sai da oficina.</p>
           <div class="garage-section-label">ARMA PRINCIPAL <small>TECLAS 1-6 TROCAM EM COMBATE</small></div>
           <div class="weapon-cards" id="weapon-cards"></div>
           <div class="weapon-detail" id="weapon-detail"></div>

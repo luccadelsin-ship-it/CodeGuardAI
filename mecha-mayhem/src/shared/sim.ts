@@ -1,5 +1,7 @@
 import type { Arena, HitZone } from './arena.ts';
 import { WEAPONS, laserEnergy, type WeaponDef, type WeaponId } from './weapons.ts';
+import { computeLoadout, type Loadout } from './parts.ts';
+import { DEFAULT_PARTS, normalizeParts, type MechPartConfig } from './customization.ts';
 
 /** Movement tuning. Shared by client prediction and the online server. */
 export const MOVE = {
@@ -59,6 +61,9 @@ export interface MechState {
   meleeWindow: number;
   parryTime: number;
   parts: Record<HitZone, number>;
+  /** Chassis choice and derived stats (weight, load, armour, speed...). */
+  chassis: MechPartConfig;
+  loadout: Loadout;
 }
 
 export interface MechInput {
@@ -82,13 +87,17 @@ export interface SimEvents {
   jetStart?: boolean;
 }
 
-export function createMechState(x: number, y: number, z: number, yaw: number, weapon: WeaponId = 'mg'): MechState {
+export function createMechState(x: number, y: number, z: number, yaw: number, weapon: WeaponId = 'mg', chassis: MechPartConfig = DEFAULT_PARTS): MechState {
+  const parts = normalizeParts(chassis);
+  const loadout = computeLoadout(parts, weapon);
   return {
     x, y, z, vx: 0, vy: 0, vz: 0, pushX: 0, pushZ: 0, yaw, pitch: 0.12, grounded: true, jumpHeld: false, jetting: false,
     health: MOVE.maxHealth, energy: 100, energyDelay: 0, heat: 0, overheated: false, sinceShot: 9, bloom: 0, charge: 0,
     fireCd: 0, weapon, dashCd: 0, dashTime: 0, dashX: 0, dashZ: 1, shieldCd: 0, shieldTime: 0, impactCd: 0, invulnerable: 0,
     meleeCombo: 0, meleeWindow: 0, parryTime: 0,
-    parts: { head: 45, torso: 120, leftArm: 55, rightArm: 55, leftLeg: 65, rightLeg: 65 },
+    parts: { ...loadout.zones },
+    chassis: parts,
+    loadout,
   };
 }
 
@@ -96,8 +105,13 @@ export function clampPitch(pitch: number): number {
   return Math.max(-0.42, Math.min(0.78, pitch));
 }
 
+/** Energy cost after the torso battery and overload modifiers. */
+export function energyCost(s: MechState, amount: number): number {
+  return amount * (s.loadout?.energyCostMul ?? 1);
+}
+
 function spendEnergy(s: MechState, amount: number): void {
-  s.energy = Math.max(0, s.energy - amount);
+  s.energy = Math.max(0, s.energy - energyCost(s, amount));
   s.energyDelay = MOVE.energyDelay;
 }
 
@@ -117,7 +131,7 @@ export function stepMech(s: MechState, input: MechInput, dt: number, arena: Aren
   const def = WEAPONS[s.weapon];
   const charging = def.kind === 'charge' && s.charge > 0;
   let speed = (input.sprint && !charging ? MOVE.sprint : MOVE.walk) * def.weight * (charging ? 0.7 : 1);
-  speed *= 1 - (s.parts.leftLeg <= 0 ? 0.24 : 0) - (s.parts.rightLeg <= 0 ? 0.24 : 0);
+  speed *= (s.loadout?.speedMul ?? 1) * (1 - (s.parts.leftLeg <= 0 ? 0.24 : 0) - (s.parts.rightLeg <= 0 ? 0.24 : 0));
   if (mz < -0.1) speed *= MOVE.backwards;
 
   // Abilities.
@@ -128,7 +142,7 @@ export function stepMech(s: MechState, input: MechInput, dt: number, arena: Aren
   s.invulnerable = Math.max(0, s.invulnerable - dt);
   s.meleeWindow = Math.max(0, s.meleeWindow - dt);
   s.parryTime = Math.max(0, s.parryTime - dt);
-  if (input.dash && s.dashCd <= 0 && s.dashTime <= 0 && s.energy >= MOVE.dashCost) {
+  if (input.dash && s.dashCd <= 0 && s.dashTime <= 0 && s.energy >= energyCost(s, MOVE.dashCost)) {
     const len = Math.hypot(wishX, wishZ);
     s.dashX = len > 0.1 ? wishX / len : sin;
     s.dashZ = len > 0.1 ? wishZ / len : cos;
@@ -137,7 +151,7 @@ export function stepMech(s: MechState, input: MechInput, dt: number, arena: Aren
     spendEnergy(s, MOVE.dashCost);
     events.dashed = true;
   }
-  if (input.shield && s.shieldCd <= 0 && s.energy >= MOVE.shieldCost) {
+  if (input.shield && s.shieldCd <= 0 && s.energy >= energyCost(s, MOVE.shieldCost)) {
     s.shieldTime = MOVE.shieldTime;
     s.shieldCd = MOVE.shieldCooldown;
     spendEnergy(s, MOVE.shieldCost);
@@ -174,7 +188,7 @@ export function stepMech(s: MechState, input: MechInput, dt: number, arena: Aren
   const wasJetting = s.jetting;
   s.jetting = false;
   if (jumpPressed && s.grounded) {
-    s.vy = MOVE.jump;
+    s.vy = MOVE.jump * (s.loadout?.jumpMul ?? 1);
     s.grounded = false;
     events.jumped = true;
   } else if (input.jump && !s.grounded && !jumpPressed && s.energy > 1 && s.y < arena.deckY + MOVE.jetCeiling && s.vy < MOVE.jetMaxRise) {
@@ -197,7 +211,7 @@ export function stepMech(s: MechState, input: MechInput, dt: number, arena: Aren
 
   // Resources.
   s.energyDelay = Math.max(0, s.energyDelay - dt);
-  if (s.energyDelay <= 0) s.energy = Math.min(100, s.energy + MOVE.energyRegen * dt);
+  if (s.energyDelay <= 0) s.energy = Math.min(100, s.energy + MOVE.energyRegen * (s.loadout?.energyRegenMul ?? 1) * dt);
   s.sinceShot += dt;
   s.heat = Math.max(0, s.heat - dt * (s.sinceShot > 0.35 ? MOVE.heatDecayIdle : MOVE.heatDecay));
   if (s.overheated && s.heat < MOVE.overheatRecover) s.overheated = false;
@@ -212,6 +226,11 @@ export function weaponOperational(s: MechState): boolean {
   return s.parts.rightArm > 0;
 }
 
+/** Field repair: every hit zone back to its chassis integrity. */
+export function restoreParts(s: MechState): void {
+  s.parts = { ...s.loadout.zones };
+}
+
 export function applyPartDamage(s: MechState, zone: HitZone, amount: number): boolean {
   const before = s.parts[zone];
   s.parts[zone] = Math.max(0, before - amount);
@@ -224,8 +243,10 @@ export function applyPartDamage(s: MechState, zone: HitZone, amount: number): bo
  */
 export function stepTrigger(s: MechState, held: boolean, dt: number): FireCommand | null {
   const def = WEAPONS[s.weapon];
+  // Every weapon, including the laser charge, needs a working right arm.
+  if (!weaponOperational(s)) { s.charge = 0; return null; }
   if (def.kind === 'charge') {
-    if (held && s.fireCd <= 0 && s.energy >= laserEnergy(0)) {
+    if (held && s.fireCd <= 0 && s.energy >= energyCost(s, laserEnergy(0))) {
       s.charge = Math.min(def.chargeTime, s.charge + dt);
       return null;
     }
@@ -235,7 +256,7 @@ export function stepTrigger(s: MechState, held: boolean, dt: number): FireComman
       if (charge < def.minCharge) return null;
       const charge01 = Math.min(1, charge / def.chargeTime);
       const cost = laserEnergy(charge01);
-      if (s.energy < cost * 0.6) return null;
+      if (s.energy < energyCost(s, cost) * 0.6) return null;
       spendEnergy(s, cost);
       s.fireCd = def.interval;
       s.sinceShot = 0;
@@ -244,7 +265,7 @@ export function stepTrigger(s: MechState, held: boolean, dt: number): FireComman
     if (!held) s.charge = 0;
     return null;
   }
-  if (!held || s.fireCd > 0 || s.overheated || !weaponOperational(s) || (def.kind === 'melee' && s.energy < def.energy)) return null;
+  if (!held || s.fireCd > 0 || s.overheated || !weaponOperational(s) || (def.kind === 'melee' && s.energy < energyCost(s, def.energy))) return null;
   applyShotCost(s, def);
   return { weapon: def.id, charge: 1 };
 }
@@ -267,6 +288,7 @@ export function applyShotCost(s: MechState, def: WeaponDef): void {
 export function switchWeapon(s: MechState, weapon: WeaponId): boolean {
   if (s.weapon === weapon) return false;
   s.weapon = weapon;
+  s.loadout = computeLoadout(s.chassis ?? DEFAULT_PARTS, weapon);
   s.charge = 0;
   s.meleeCombo = 0;
   s.meleeWindow = 0;
@@ -278,7 +300,7 @@ export function switchWeapon(s: MechState, weapon: WeaponId): boolean {
 export function damageTaken(s: MechState, amount: number, projectile = false): number {
   if (s.invulnerable > 0) return 0;
   if (projectile && s.parryTime > 0) return 0;
-  let result = amount;
+  let result = amount * (s.loadout?.damageMul ?? 1);
   if (s.shieldTime > 0) result *= 0.25;
   if (s.dashTime > 0) result *= 0.4;
   return result;

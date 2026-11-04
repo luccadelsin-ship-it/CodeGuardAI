@@ -16,7 +16,8 @@ import {
   Vector3,
 } from '@babylonjs/core';
 import { rayMech, raySphere, type Cover, type HitZone } from '../shared/arena';
-import { aimOrigin, createMechState, stepMech, stepTrigger, switchWeapon, damageTaken, MOVE, type FireCommand, type MechInput, type MechState } from '../shared/sim';
+import { aimOrigin, applyPartDamage, createMechState, restoreParts, stepMech, stepTrigger, switchWeapon, damageTaken, weaponOperational, MOVE, type FireCommand, type MechInput, type MechState } from '../shared/sim';
+import { DEFAULT_PARTS, type MechPartConfig } from '../shared/customization';
 import { WEAPONS, WEAPON_ORDER, damageAtDistance, laserDamage, meleeDamage, meleeInArc, spreadDirections, type WeaponId } from '../shared/weapons';
 import { Sfx } from './audio';
 import { DIFFICULTIES, ENEMY_DEFS, Enemy, type AiContext, type Difficulty, type EnemyType, type ProjectileOptions } from './drones';
@@ -183,6 +184,7 @@ export class CombatGame {
   private onlineLock: number | undefined;
   private playerDown = false;
   private lastHurt = 0;
+  private disabledWarn = -9;
 
   constructor(
     private readonly scene: Scene,
@@ -264,6 +266,14 @@ export class CombatGame {
   setSound(enabled: boolean): void { this.sfx.setEnabled(enabled); }
   setDifficulty(difficulty: Difficulty): void { this.difficulty = difficulty; }
 
+  /** Chassis used by training and prediction; the server recomputes it online. */
+  chassis: MechPartConfig = { ...DEFAULT_PARTS };
+  setChassis(parts: MechPartConfig): void {
+    this.chassis = { ...parts };
+    this.player.setParts(parts);
+    if (this.mode !== 'game') this.state = createMechState(this.state.x, this.state.y, this.state.z, this.yaw, this.weapon, this.chassis);
+  }
+
   setWeapon(weapon: WeaponId): void {
     if (this.keyboardAttack?.weapon !== weapon) this.keyboardAttack = null;
     this.weapon = weapon;
@@ -343,7 +353,7 @@ export class CombatGame {
 
   private resetPlayer(at: Vector3, yaw: number): void {
     this.clearCombat();
-    this.state = createMechState(at.x, at.y, at.z, yaw, this.weapon);
+    this.state = createMechState(at.x, at.y, at.z, yaw, this.weapon, this.chassis);
     this.keyboardAttack = null;
     this.lastHurt = this.time;
     this.yaw = yaw;
@@ -587,6 +597,11 @@ export class CombatGame {
         if (this.keyboardAttack.ttl <= 0) this.keyboardAttack = null;
       }
       const fire = stepTrigger(s, firing, dt);
+      if (firing && !weaponOperational(s) && this.time - this.disabledWarn > 1.6) {
+        this.disabledWarn = this.time;
+        this.sfx.overheat();
+        this.onToast?.('ARMA DESATIVADA · BRAÇO DIREITO DESTRUÍDO · USE F (IMPACTO) OU PEGUE SUPRIMENTOS');
+      }
       const def = WEAPONS[s.weapon];
       if (def.kind === 'charge') {
         if (s.charge > 0 && !this.chargingSound) { this.sfx.startCharge(); this.chargingSound = true; }
@@ -888,7 +903,7 @@ export class CombatGame {
     this.pendingExplosions.push({ at: barrel.position.add(new Vector3(0, 0.7, 0)), radius: 5.5, damage: 70, source: 'barrel' });
   }
 
-  private damagePlayer(amount: number, from: Vector3, knockback: number, source: string, projectile = false): void {
+  private damagePlayer(amount: number, from: Vector3, knockback: number, source: string, projectile = false, zone: HitZone = 'torso'): void {
     if (this.session !== 'training' || this.playerDown || this.finished) return;
     const s = this.state;
     const taken = damageTaken(s, amount, projectile);
@@ -896,6 +911,12 @@ export class CombatGame {
     if (taken <= 0) return;
     if (s.shieldTime > 0) this.sfx.shieldHit(); else this.sfx.playerHurt();
     s.health = Math.max(0, s.health - taken);
+    // Localized damage, same rule as the server: the hit zone loses integrity and may come off.
+    if (applyPartDamage(s, zone, taken)) {
+      this.player.detachPart(zone);
+      this.sfx.explosion(0.5);
+      this.onToast?.(PART_LOST[zone]);
+    }
     this.lastHurt = this.time;
     this.stats.damageTaken += taken;
     this.player.flashHit();
@@ -1066,6 +1087,7 @@ export class CombatGame {
       let hitWhat: 'cover' | 'player' | 'enemy' | 'deck' | 'barrel' | null = null;
       let hitEnemy: Enemy | null = null;
       let hitBarrel: Barrel | null = null;
+      let playerZone: HitZone = 'torso';
       const coverT = arena.raycastCover(p.pos, dir, len);
       if (coverT !== null) { hitT = coverT; hitWhat = 'cover'; }
       const barrel = this.barrelHit(p.pos, dir, hitT ?? len);
@@ -1073,6 +1095,7 @@ export class CombatGame {
       if (p.hostile) {
         if (!this.playerDown) {
           const t = rayMech(p.pos, dir, hitT ?? len, new Vector3(this.state.x, this.state.y, this.state.z), 1);
+          if (t) playerZone = t.zone;
           if (t) { hitT = t.t; hitWhat = 'player'; }
         }
       } else {
@@ -1086,7 +1109,7 @@ export class CombatGame {
       if (hitWhat === null && next.y < this.world.deckY + 0.05 && arena.onDeck(next.x, next.z, 0)) { hitT = len; hitWhat = 'deck'; }
       if (hitWhat === null) { p.pos.copyFrom(next); continue; }
       const at = p.pos.add(dir.scale(hitT ?? len));
-      if (hitWhat === 'player') this.damagePlayer(p.damage, p.owner?.position ?? p.pos, p.kind === 'missile' ? 3 : 0.6, p.owner?.def.name ?? 'PROJÉTIL', true);
+      if (hitWhat === 'player') this.damagePlayer(p.damage, p.owner?.position ?? p.pos, p.kind === 'missile' ? 3 : 0.6, p.owner?.def.name ?? 'PROJÉTIL', true, playerZone);
       if (hitWhat === 'enemy' && hitEnemy) this.stats.hits++;
       if (hitWhat === 'enemy' && hitEnemy) this.damageEnemy(hitEnemy, p.damage, false, at, WEAPONS.missile.knockback, p.pos);
       if (hitWhat === 'barrel' && hitBarrel) this.damageBarrel(hitBarrel, p.damage + p.splashDamage, p.hostile ? 'enemy' : 'player');
@@ -1118,7 +1141,7 @@ export class CombatGame {
         const end = origin.add(dir.scale(hit ? hit.t : limit));
         this.fx.beam(origin, end, color, 0.12);
         this.fx.sparks(end, color, 10, 0.8);
-        if (hit) this.damagePlayer(damage * (hit.critical ? 1.25 : 1), owner.position, 2, owner.def.name);
+        if (hit) this.damagePlayer(damage * (hit.critical ? 1.25 : 1), owner.position, 2, owner.def.name, false, hit.zone);
         else if (barrel) this.damageBarrel(barrel.barrel, damage, 'enemy');
         return !!hit;
       },
@@ -1186,6 +1209,14 @@ export class CombatGame {
     }
   }
 
+  /** Field repair: restore every limb, both in the simulation and on the model. */
+  private repairLimbs(): void {
+    const lost = Object.values(this.state.parts).some((v) => v <= 0);
+    restoreParts(this.state);
+    this.player.restoreParts();
+    if (lost) this.onToast?.('MEMBROS RESTAURADOS · ARMA OPERACIONAL');
+  }
+
   private beginWave(index: number): void {
     if (index >= WAVES.length) return;
     this.waveIndex = index;
@@ -1211,6 +1242,7 @@ export class CombatGame {
       this.state.energy = Math.min(100, this.state.energy + 45);
       this.state.heat = Math.max(0, this.state.heat - 50);
       if (this.state.heat < MOVE.overheatRecover) this.state.overheated = false;
+      this.repairLimbs();
       this.float(this.player.root.position.add(new Vector3(0, 3.8, 0)), `+${repair} REPARO`, 'heal');
     }
     if (this.waveIndex >= WAVES.length - 1) {
@@ -1256,6 +1288,7 @@ export class CombatGame {
           this.state.energy = 100;
           this.state.heat = 0;
           this.state.overheated = false;
+          this.repairLimbs();
           this.sfx.pickup();
           this.float(p.position.add(new Vector3(0, 2, 0)), '+45 INTEGRIDADE', 'heal');
           this.onToast?.('SUPRIMENTOS: REPARO E ENERGIA');
@@ -1476,3 +1509,12 @@ function rayBoxCover(origin: Vector3, dir: Vector3, maxDistance: number, deckY: 
   return near <= maxDistance ? near : null;
 }
 
+
+const PART_LOST: Record<HitZone, string> = {
+  head: 'CABEÇA PERDIDA · SENSORES DANIFICADOS',
+  torso: 'TRONCO CRÍTICO',
+  leftArm: 'BRAÇO ESQUERDO PERDIDO',
+  rightArm: 'BRAÇO DIREITO PERDIDO · ARMA DESATIVADA ATÉ O REPARO',
+  leftLeg: 'PERNA ESQUERDA PERDIDA · VELOCIDADE REDUZIDA',
+  rightLeg: 'PERNA DIREITA PERDIDA · VELOCIDADE REDUZIDA',
+};

@@ -1,5 +1,5 @@
-import { Vector3, type Scene } from '@babylonjs/core';
-import { MODE_RULES, PROTOCOL_VERSION, type ClientMessage, type InputFrame, type MatchPhase, type OnlineMode, type PlayerInfo, type PlayerSnap, type ServerMessage, type Team } from '../shared/protocol';
+import { Color3, Mesh, MeshBuilder, StandardMaterial, Vector3, type Scene } from '@babylonjs/core';
+import { CORE_RULES, MODE_RULES, PROTOCOL_VERSION, isTeamMode, type ClientMessage, type CoreState, type InputFrame, type MatchPhase, type OnlineMode, type PlayerInfo, type PlayerSnap, type ServerMessage, type Team } from '../shared/protocol';
 import { stepMech, type FireCommand, type MechInput, type MechState } from '../shared/sim';
 import { WEAPONS, type WeaponId } from '../shared/weapons';
 import type { CombatGame, OnlineBridge, RemoteTarget, ResultInfo } from '../game/combat';
@@ -49,6 +49,42 @@ export class OnlineSession implements OnlineBridge {
   ping = 0;
   teamScores: [number, number] = [0, 0];
   coreOwner: Team = null;
+  coreState: CoreState = 'neutral';
+  coreProgress = 0;
+  private coreZone: { ring: Mesh; fill: Mesh; beacon: Mesh; mat: StandardMaterial; fillMat: StandardMaterial } | null = null;
+
+  /** Visible capture area for Core Control: ring, floor disc and beacon coloured by state. */
+  private updateCoreZone(dt: number): void {
+    if (this.mode !== 'core') return;
+    if (!this.coreZone) {
+      const y = this.game.world.deckY;
+      const mat = new StandardMaterial('core-zone-mat', this.scene);
+      mat.disableLighting = true;
+      mat.emissiveColor = new Color3(0.8, 0.9, 1);
+      const fillMat = new StandardMaterial('core-zone-fill', this.scene);
+      fillMat.disableLighting = true;
+      fillMat.alpha = 0.16;
+      fillMat.emissiveColor = new Color3(0.8, 0.9, 1);
+      const ring = MeshBuilder.CreateTorus('core-zone-ring', { diameter: CORE_RULES.radius * 2, thickness: 0.18, tessellation: 64 }, this.scene);
+      ring.position.set(CORE_RULES.x, y + 0.08, CORE_RULES.z);
+      ring.material = mat;
+      const fill = MeshBuilder.CreateDisc('core-zone-fill', { radius: CORE_RULES.radius, tessellation: 64 }, this.scene);
+      fill.rotation.x = Math.PI / 2;
+      fill.position.set(CORE_RULES.x, y + 0.04, CORE_RULES.z);
+      fill.material = fillMat;
+      const beacon = MeshBuilder.CreateCylinder('core-zone-beacon', { diameterTop: 0.3, diameterBottom: 1.1, height: 9, tessellation: 12 }, this.scene);
+      beacon.position.set(CORE_RULES.x, y + 4.5, CORE_RULES.z);
+      beacon.material = fillMat;
+      for (const m of [ring, fill, beacon]) m.isPickable = false;
+      this.coreZone = { ring, fill, beacon, mat, fillMat };
+    }
+    const z = this.coreZone;
+    const color = this.coreState === 'blue' ? new Color3(0.3, 0.75, 1) : this.coreState === 'orange' ? new Color3(1, 0.55, 0.2) : this.coreState === 'contested' ? new Color3(1, 0.2, 0.25) : new Color3(0.85, 0.9, 0.95);
+    z.mat.emissiveColor = color;
+    z.fillMat.emissiveColor = color;
+    z.fillMat.alpha = this.coreState === 'contested' ? 0.12 + 0.1 * Math.abs(Math.sin(performance.now() / 120)) : 0.16;
+    z.ring.rotation.y += dt * 0.4;
+  }
   private ws: WebSocket;
   private readonly remotes = new Map<number, Remote>();
   private readonly pending: InputFrame[] = [];
@@ -146,7 +182,15 @@ export class OnlineSession implements OnlineBridge {
     if (this.phase === 'countdown') return `INÍCIO EM ${Math.ceil(this.timer)}`;
     if (this.phase === 'ended') return 'PARTIDA ENCERRADA';
     const me = this.lastRows.find((r) => r.me);
-    return `${rules.label} · ${me?.kills ?? 0}/${rules.fragLimit} ABATES · ${time}${this.alive ? '' : ' · RENASCENDO'}`;
+    const respawn = this.alive ? '' : ' · RENASCENDO';
+    const [b, o] = [Math.floor(this.teamScores[0]), Math.floor(this.teamScores[1])];
+    const mine = this.team === 'blue' ? 'VOCÊ É AZUL' : 'VOCÊ É LARANJA';
+    if (this.mode === 'core') {
+      const state = this.coreState === 'contested' ? 'NÚCLEO DISPUTADO' : this.coreState === 'neutral' ? 'NÚCLEO NEUTRO · CAPTURE NO CENTRO' : `NÚCLEO ${this.coreState === 'blue' ? 'AZUL' : 'LARANJA'}${this.coreState === this.team ? ' (SEU)' : ' · RETOME!'}`;
+      return `${state} · AZUL ${b} × ${o} LARANJA / ${rules.fragLimit} · ${mine} · ${time}${respawn}`;
+    }
+    if (isTeamMode(this.mode)) return `${rules.label} · AZUL ${b} × ${o} LARANJA / ${rules.fragLimit} · ${mine} · ${time}${respawn}`;
+    return `${rules.label} · ${me?.kills ?? 0}/${rules.fragLimit} ABATES · ${time}${respawn}`;
   }
 
   leave(): void {
@@ -154,6 +198,7 @@ export class OnlineSession implements OnlineBridge {
     try { this.ws.close(); } catch { /* already closed */ }
     for (const r of this.remotes.values()) r.visual.dispose();
     this.remotes.clear();
+    if (this.coreZone) { for (const m of [this.coreZone.ring, this.coreZone.fill, this.coreZone.beacon]) m.dispose(); this.coreZone.mat.dispose(); this.coreZone.fillMat.dispose(); this.coreZone = null; }
   }
 
   private flushInputs(): void {
@@ -163,6 +208,7 @@ export class OnlineSession implements OnlineBridge {
   }
 
   update(dt: number): void {
+    this.updateCoreZone(dt);
     this.sendTimer -= dt;
     if (this.sendTimer <= 0) { this.flushInputs(); this.sendTimer = 1 / 30; }
     this.pingTimer -= dt;
@@ -343,17 +389,25 @@ export class OnlineSession implements OnlineBridge {
         if (message.phase === 'waiting' && previous === 'ended') this.callbacks.onBanner?.('NOVA PARTIDA', 'AGUARDANDO PILOTOS');
         if (message.phase === 'ended' && message.ranking) {
           const ranking = message.ranking;
-          const winner = ranking[0];
           const mine = ranking.findIndex((r) => r.id === this.myId);
-          const won = winner?.id === this.myId;
+          const teamMode = isTeamMode(this.mode);
+          const scores = message.teamScores ?? [Math.floor(this.teamScores[0]), Math.floor(this.teamScores[1])];
+          const winnerTeam = message.winnerTeam ?? null;
+          // Team modes: every member of the winning team wins; equal scores are a draw.
+          const draw = teamMode ? winnerTeam === 'draw' : message.winnerId === null;
+          const won = teamMode ? !draw && winnerTeam === this.team : message.winnerId === this.myId;
+          const winner = ranking.find((r) => r.id === message.winnerId) ?? ranking[0];
+          const teamName = (t: Team | 'draw' | null) => t === 'blue' ? 'AZUL' : t === 'orange' ? 'LARANJA' : 'NENHUMA';
           const result: ResultInfo = {
             won,
-            kicker: `${MODE_RULES[this.mode].label} · SALA ${this.room}`,
-            title: won ? 'VITÓRIA' : `${mine + 1}º LUGAR`,
-            detail: winner ? `${won ? 'Você venceu' : `${winner.name} venceu`} com ${winner.kills} abates.` : 'Partida encerrada.',
+            kicker: `${MODE_RULES[this.mode].label} · SALA ${this.room}${teamMode ? ` · SUA EQUIPE: ${teamName(this.team)}` : ''}`,
+            title: draw ? 'EMPATE' : won ? 'VITÓRIA' : teamMode ? 'DERROTA' : `${mine + 1}º LUGAR`,
+            detail: teamMode
+              ? `Placar final: AZUL ${scores[0]} × ${scores[1]} LARANJA. ${draw ? 'As equipes empataram.' : `Equipe ${teamName(winnerTeam)} venceu.`}`
+              : draw ? 'Empate no topo do placar.' : `${won ? 'Você venceu' : `${winner?.name ?? 'Outro piloto'} venceu`} com ${winner?.kills ?? 0} abates.`,
             score: ranking[mine]?.score ?? 0,
             difficulty: 'veteran',
-            stats: ranking.slice(0, 6).map((r, i) => [`${i + 1}. ${r.id === this.myId ? 'VOCÊ' : r.name}`, `${r.kills} A / ${r.deaths} M`]),
+            stats: ranking.slice(0, 10).map((r, i) => [`${i + 1}. ${r.id === this.myId ? 'VOCÊ' : r.name}${r.team ? ` (${teamName(r.team)})` : ''}`, `${r.kills} A / ${r.deaths} M`]),
           };
           won ? this.game.sfx.victory() : this.game.sfx.defeat();
           this.game.finishOnline(result);
@@ -373,6 +427,8 @@ export class OnlineSession implements OnlineBridge {
     this.timer = snap.timer;
     this.teamScores = snap.teamScores;
     this.coreOwner = snap.coreOwner;
+    this.coreState = snap.coreState ?? (snap.coreOwner ?? 'neutral');
+    this.coreProgress = snap.coreProgress ?? 0;
     const rows: ScoreRow[] = [];
     for (const p of snap.players) {
       rows.push({ id: p.id, name: this.name(p.id), kills: p.kills, deaths: p.deaths, score: p.score, ping: p.ping, me: p.id === this.myId, team: p.team });

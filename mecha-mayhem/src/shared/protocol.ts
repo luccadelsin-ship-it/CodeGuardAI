@@ -7,10 +7,28 @@ import type { MapId } from './maps.ts';
 import type { MechPartConfig } from './customization.ts';
 export type { MapId } from './maps.ts';
 
-export const PROTOCOL_VERSION = 7;
+export const PROTOCOL_VERSION = 8;
 export type OnlineMode = 'ffa' | 'duel' | 'team2' | 'team5' | 'core';
 export type Team = 'blue' | 'orange' | null;
 export type MatchPhase = 'waiting' | 'countdown' | 'playing' | 'ended';
+export type CoreState = 'neutral' | 'blue' | 'orange' | 'contested';
+
+/** Core Control rules, shared by the server scoring and the client display. */
+export const CORE_RULES = {
+  /** Capture zone: centre of the arena, on the central deck only. */
+  x: 0, z: 0, radius: 7,
+  /** Feet must be within this height of the deck top (no scoring from jets or crates). */
+  maxHeight: 1.1,
+  /** Seconds of uncontested presence to flip the core. */
+  captureTime: 3,
+  /** Points per second for the owning team. */
+  pointsPerSecond: 2,
+} as const;
+
+/** How many pilots (humans + bots) a public room fills to. */
+export const BOT_FILL: Record<OnlineMode, number> = { ffa: 4, duel: 2, team2: 4, team5: 10, core: 8 };
+
+export function isTeamMode(mode: OnlineMode): boolean { return mode === 'team2' || mode === 'team5' || mode === 'core'; }
 
 export const MODE_RULES: Record<OnlineMode, { label: string; maxPlayers: number; fragLimit: number; timeLimit: number }> = {
   ffa: { label: 'MATA-MATA', maxPlayers: 6, fragLimit: 15, timeLimit: 360 },
@@ -22,7 +40,7 @@ export const MODE_RULES: Record<OnlineMode, { label: string; maxPlayers: number;
 
 export interface InputFrame extends MechInput { seq: number; dt: number }
 
-export interface PlayerInfo { id: number; name: string; palette: MechPalette; weapon: WeaponId; team: Team; parts: MechPartConfig }
+export interface PlayerInfo { id: number; name: string; palette: MechPalette; weapon: WeaponId; team: Team; parts: MechPartConfig; bot?: boolean }
 
 export interface PlayerSnap {
   id: number;
@@ -61,13 +79,13 @@ export type ServerMessage =
   | { t: 'join'; player: PlayerInfo }
   | { t: 'leave'; id: number }
   | { t: 'info'; player: PlayerInfo }
-  | { t: 'snap'; time: number; ack: number; phase: MatchPhase; timer: number; me: MechState | null; players: PlayerSnap[]; missiles: MissileSnap[]; teamScores: [number, number]; coreOwner: Team }
+  | { t: 'snap'; time: number; ack: number; phase: MatchPhase; timer: number; me: MechState | null; players: PlayerSnap[]; missiles: MissileSnap[]; teamScores: [number, number]; coreOwner: Team; coreState: CoreState; coreProgress: number }
   | { t: 'shot'; id: number; weapon: WeaponId; o: [number, number, number]; ends: Array<[number, number, number]>; charge: number }
   | { t: 'hit'; target: number; by: number; amount: number; crit: boolean; zone: HitZone; detached: boolean; hp: number; at: [number, number, number] }
   | { t: 'kill'; killer: number; victim: number; weapon: WeaponId | 'impact' | 'missile' }
   | { t: 'spawn'; id: number; x: number; y: number; z: number; yaw: number }
   | { t: 'boom'; x: number; y: number; z: number; r: number }
   | { t: 'impact'; id: number }
-  | { t: 'phase'; phase: MatchPhase; timer: number; ranking?: Array<{ id: number; name: string; kills: number; deaths: number; score: number }> }
+  | { t: 'phase'; phase: MatchPhase; timer: number; ranking?: Array<{ id: number; name: string; kills: number; deaths: number; score: number; team: Team; bot: boolean }>; winnerTeam?: Team | 'draw'; winnerId?: number | null; teamScores?: [number, number] }
   | { t: 'pong'; c: number; s: number }
   | { t: 'error'; message: string };
