@@ -180,6 +180,7 @@ export class CombatGame {
   private aberration = 0;
   private onlineLock: number | undefined;
   private playerDown = false;
+  private lastHurt = 0;
 
   constructor(
     private readonly scene: Scene,
@@ -438,7 +439,7 @@ export class CombatGame {
     this.fx.update(dt);
     this.updateCamera(realDt);
     this.world.update(realDt, this.time, this.camera.position);
-    this.aberration = Math.max(0, this.aberration - realDt * 90);
+    this.aberration = Math.max(0, this.aberration - realDt * 40);
     if (this.pipeline.chromaticAberrationEnabled) this.pipeline.chromaticAberration.aberrationAmount = this.aberration;
   }
 
@@ -726,7 +727,7 @@ export class CombatGame {
       this.fx.beam(muzzle, ends[0], def.color, width);
       this.sfx.laser(cmd.charge);
       this.fx.shake(cmd.charge * 0.25);
-      this.aberration = Math.max(this.aberration, 25 * cmd.charge);
+      this.aberration = Math.max(this.aberration, 6 * cmd.charge);
     } else if (def.id === 'shotgun') {
       for (const end of ends) this.fx.tracer(muzzle, end, def.color, 0.035, 0.08);
       this.sfx.shotgun();
@@ -740,7 +741,8 @@ export class CombatGame {
       this.online?.fire(cmd, origin, dir, seed);
       return;
     }
-    for (const [enemy, info] of damageByTarget) this.damageEnemy(enemy, info.amount, info.crit, info.at, def.knockback, origin);
+    if (damageByTarget.size) this.stats.hits++;
+    for (const [enemy, info] of damageByTarget) this.damageEnemy(enemy, info.amount, info.crit, info.at, def.knockback * Math.min(1, info.amount / (def.damage * def.pellets * 0.6)), origin);
   }
 
   private findLock(origin: Vector3, dir: Vector3): Enemy | null {
@@ -798,7 +800,6 @@ export class CombatGame {
   private damageEnemy(enemy: Enemy, amount: number, crit: boolean, at: Vector3, knockback: number, from: Vector3): void {
     if (!enemy.alive) return;
     const killed = enemy.takeDamage(amount, from, knockback);
-    this.stats.hits++;
     this.stats.damageDealt += amount;
     if (crit) this.stats.crits++;
     this.score += Math.round(amount * (crit ? 1.5 : 1));
@@ -841,10 +842,11 @@ export class CombatGame {
     if (taken <= 0) return;
     if (s.shieldTime > 0) this.sfx.shieldHit(); else this.sfx.playerHurt();
     s.health = Math.max(0, s.health - taken);
+    this.lastHurt = this.time;
     this.stats.damageTaken += taken;
     this.player.flashHit();
     this.fx.shake(Math.min(0.4, 0.08 + taken * 0.012));
-    this.aberration = Math.max(this.aberration, 18 + taken * 2);
+    this.aberration = Math.max(this.aberration, Math.min(14, 4 + taken * 0.6));
     const to = from.subtract(new Vector3(s.x, s.y, s.z));
     this.onDamage?.(Math.atan2(to.x, to.z) - this.yaw, taken);
     if (knockback > 0) {
@@ -869,7 +871,7 @@ export class CombatGame {
     this.player.flashHit();
     if (s.shieldTime > 0) this.sfx.shieldHit(); else this.sfx.playerHurt();
     this.fx.shake(Math.min(0.4, 0.08 + amount * 0.012));
-    this.aberration = Math.max(this.aberration, 18 + amount * 2);
+    this.aberration = Math.max(this.aberration, Math.min(14, 4 + amount * 0.6));
     const to = from.subtract(new Vector3(s.x, s.y, s.z));
     this.onDamage?.(Math.atan2(to.x, to.z) - this.yaw, amount);
   }
@@ -1031,6 +1033,7 @@ export class CombatGame {
       if (hitWhat === null) { p.pos.copyFrom(next); continue; }
       const at = p.pos.add(dir.scale(hitT ?? len));
       if (hitWhat === 'player') this.damagePlayer(p.damage, p.owner?.position ?? p.pos, p.kind === 'missile' ? 3 : 0.6, p.owner?.def.name ?? 'PROJÉTIL');
+      if (hitWhat === 'enemy' && hitEnemy) this.stats.hits++;
       if (hitWhat === 'enemy' && hitEnemy) this.damageEnemy(hitEnemy, p.damage, false, at, WEAPONS.missile.knockback, p.pos);
       if (hitWhat === 'barrel' && hitBarrel) this.damageBarrel(hitBarrel, p.damage + p.splashDamage, p.hostile ? 'enemy' : 'player');
       if (p.splash > 0) this.explode(at, p.splash, p.splashDamage, p.hostile ? 'enemy' : 'player');
@@ -1093,6 +1096,8 @@ export class CombatGame {
 
   private updateTraining(dt: number): void {
     if (!this.finished) this.stats.time += dt;
+    // Out-of-combat repair keeps the pace up between skirmishes.
+    if (!this.playerDown && this.time - this.lastHurt > 4.5 && this.state.health < MOVE.maxHealth) this.state.health = Math.min(MOVE.maxHealth, this.state.health + dt * 3.5);
     this.comboTime = Math.max(0, this.comboTime - dt);
     if (this.comboTime === 0) this.combo = 1;
     const ctx = this.aiContext();
@@ -1202,7 +1207,7 @@ export class CombatGame {
   private finish(won: boolean, cause = ''): void {
     if (this.finished) return;
     this.finished = true;
-    const accuracy = this.stats.shots ? Math.round((this.stats.hits / this.stats.shots) * 100) : 0;
+    const accuracy = this.stats.shots ? Math.min(100, Math.round((this.stats.hits / this.stats.shots) * 100)) : 0;
     const waves = won ? WAVES.length : this.waveActive ? this.waveIndex : this.waveIndex + 1;
     const minutes = Math.floor(this.stats.time / 60);
     const seconds = Math.floor(this.stats.time % 60).toString().padStart(2, '0');
@@ -1359,9 +1364,33 @@ export class CombatGame {
     for (let t = 0; t < seconds; t += step) this.update(step);
   }
 
+  /** Test helper: move the player to a walkable spot `distance` metres from the closest ground enemy. */
+  debugApproach(distance: number): boolean {
+    const me = new Vector3(this.state.x, this.state.y, this.state.z);
+    const target = this.enemies.filter((e) => e.alive && !e.def.flying).sort((a, b) => Vector3.Distance(a.position, me) - Vector3.Distance(b.position, me))[0];
+    if (!target) return false;
+    for (let i = 0; i < 24; i++) {
+      const angle = Math.atan2(me.x - target.position.x, me.z - target.position.z) + (i % 2 ? 1 : -1) * Math.floor(i / 2) * 0.3;
+      const x = target.position.x + Math.sin(angle) * distance;
+      const z = target.position.z + Math.cos(angle) * distance;
+      const eye = new Vector3(x, this.world.deckY + 2.6, z);
+      if (this.world.arena.canMoveTo(x, z, MOVE.radius) && this.world.arena.lineOfSight(eye, target.center)) {
+        this.state.x = x; this.state.z = z; this.state.y = this.world.deckY;
+        this.yaw = Math.atan2(target.position.x - x, target.position.z - z);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** Test helper: destroy the current wave without awarding points for it. */
   debugSkipWave(): void {
-    for (const enemy of this.enemies) if (enemy.alive) this.damageEnemy(enemy, 99999, false, enemy.center, 0, enemy.position);
+    const score = this.score;
+    const dealt = this.stats.damageDealt;
+    for (const enemy of [...this.enemies]) if (enemy.alive) this.damageEnemy(enemy, enemy.health + 1, false, enemy.center, 0, enemy.position);
     this.waveQueue.length = 0;
+    this.score = score;
+    this.stats.damageDealt = dealt;
   }
 }
 

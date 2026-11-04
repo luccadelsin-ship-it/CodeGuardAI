@@ -51,7 +51,15 @@ export class Room {
   timer = 0;
   private missiles: Missile[] = [];
 
-  constructor(readonly code: string, readonly mode: OnlineMode, readonly isPrivate: boolean, layout: ArenaLayout) {
+  readonly code: string;
+  readonly mode: OnlineMode;
+  readonly isPrivate: boolean;
+
+  // Plain fields instead of parameter properties: Node runs this file with type stripping only.
+  constructor(code: string, mode: OnlineMode, isPrivate: boolean, layout: ArenaLayout) {
+    this.code = code;
+    this.mode = mode;
+    this.isPrivate = isPrivate;
     this.arena = createArena(layout);
   }
 
@@ -164,6 +172,7 @@ export class Room {
       s.fireCd = def.interval;
       s.sinceShot = 0;
     } else applyShotCost(s, def);
+    p.charge = 0;
 
     // Validate the origin against the authoritative mech and normalise the direction.
     const expected = aimOrigin(s);

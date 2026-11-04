@@ -95,3 +95,4 @@ body.touch-mode .hud-bottom-left .hud-value strong{font-size:22px}
   .garage-panel h2{font-size:34px!important}.garage-copy{display:none}}
 @media(max-width:600px){body.touch-mode .touch-pause{left:12px;margin-left:0;top:calc(122px + env(safe-area-inset-top))}}
 @media(max-height:500px){body.touch-mode .hud-bottom-right{top:104px!important}}
+@media(min-width:601px) and (max-height:780px){.menu-layout{padding-top:3vh;padding-bottom:2vh}.game-title{font-size:clamp(64px,14vh,150px)!important;margin:12px 0 14px}.menu-subtitle{margin:14px 0 18px;font-size:16px}.primary-action{height:62px}.secondary-action{height:44px}.menu-header{min-height:54px}.menu-footer{min-height:44px}.intel-map-art{height:96px}.intel-body{padding:14px 18px}.intel-body p{font-size:13px}.theme-picker h2{font-size:28px!important}.intel-stats{margin-top:12px;padding-top:10px}.difficulty-picker{margin-top:10px}}

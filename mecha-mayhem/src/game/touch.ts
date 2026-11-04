@@ -54,7 +54,7 @@ export class TouchControls {
       this.base.style.top = `${event.clientY}px`;
       this.base.classList.remove('hidden');
       this.knob.style.transform = 'translate(-50%, -50%)';
-      moveZone.setPointerCapture?.(event.pointerId);
+      capture(moveZone, event.pointerId);
     });
     const moveUpdate = (event: PointerEvent) => {
       if (event.pointerId !== this.stickId) return;
@@ -80,7 +80,7 @@ export class TouchControls {
     const lookZone = root.querySelector('[data-zone="look"]') as HTMLElement;
     const lookStart = (event: PointerEvent, target: HTMLElement) => {
       this.lookIds.set(event.pointerId, { x: event.clientX, y: event.clientY });
-      target.setPointerCapture?.(event.pointerId);
+      capture(target, event.pointerId);
     };
     const lookMove = (event: PointerEvent) => {
       const last = this.lookIds.get(event.pointerId);
@@ -104,7 +104,7 @@ export class TouchControls {
         button.classList.add('active');
         // The fire button doubles as an aim pad while held.
         if (key === 'fire') lookStart(event, button);
-        else button.setPointerCapture?.(event.pointerId);
+        else capture(button, event.pointerId);
       });
       const release = (event: PointerEvent) => {
         this[key] = false;
@@ -168,6 +168,11 @@ export class TouchControls {
     button.classList.toggle('cooldown', seconds > 0);
     button.setAttribute('data-cd', seconds > 0 ? seconds.toFixed(1) : '');
   }
+}
+
+/** Pointer capture can throw for pointers the browser no longer tracks; it is only a nicety here. */
+function capture(element: HTMLElement, pointerId: number): void {
+  try { element.setPointerCapture(pointerId); } catch { /* ignore */ }
 }
 
 export function isTouchDevice(): boolean {

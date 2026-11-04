@@ -621,12 +621,12 @@ export class Enemy {
         this.burstTimer = 0.13;
         if (sees) {
           const origin = this.muzzlePosition;
-          ctx.fireProjectile(this, origin, this.aimAt(ctx, origin, 38), { speed: 38, damage: 6 * ctx.difficulty.damage, color: this.def.color, size: 0.22 });
+          ctx.fireProjectile(this, origin, this.aimAt(ctx, origin, 38), { speed: 36, damage: 5 * ctx.difficulty.damage, color: this.def.color, size: 0.22 });
           mech.kick(0.25);
           ctx.fx.muzzleFlash(mech.muzzle, this.def.color, 0.7);
           ctx.sfx.enemyShot();
         }
-        if (this.burstLeft === 0) { mech.setAlert(0); this.fireTimer = (1.5 + Math.random() * 1.1) / ctx.difficulty.aggression; }
+        if (this.burstLeft === 0) { mech.setAlert(0); this.fireTimer = (1.9 + Math.random() * 1.2) / ctx.difficulty.aggression; }
       }
       return;
     }
@@ -839,7 +839,7 @@ export class Enemy {
             if (sees) {
               for (let i = 0; i < 2; i++) {
                 const origin = this.muzzlePosition;
-                ctx.fireProjectile(this, origin, this.aimAt(ctx, origin, 44), { speed: 44, damage: 4.5 * ctx.difficulty.damage, color: [1, 0.3, 0.25], size: 0.17 });
+                ctx.fireProjectile(this, origin, this.aimAt(ctx, origin, 44), { speed: 42, damage: 4 * ctx.difficulty.damage, color: [1, 0.3, 0.25], size: 0.17 });
               }
               ctx.sfx.enemyShot();
             }

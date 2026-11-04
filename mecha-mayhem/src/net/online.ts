@@ -60,6 +60,7 @@ export class OnlineSession implements OnlineBridge {
   private names = new Map<number, string>();
   private scoreTimer = 0;
   private lastRows: ScoreRow[] = [];
+  private sentCharge = 0;
 
   private constructor(private readonly game: CombatGame, private readonly scene: Scene, ws: WebSocket, private readonly callbacks: OnlineCallbacks) {
     this.ws = ws;
@@ -161,6 +162,9 @@ export class OnlineSession implements OnlineBridge {
     if (this.sendTimer <= 0) { this.flushInputs(); this.sendTimer = 1 / 30; }
     this.pingTimer -= dt;
     if (this.pingTimer <= 0) { this.send({ t: 'ping', c: now(), p: this.ping }); this.pingTimer = 2; }
+    // Share the laser charge so other pilots see the coils glow.
+    const charge = WEAPONS[this.game.state.weapon].kind === 'charge' ? this.game.state.charge / WEAPONS.laser.chargeTime : 0;
+    if (Math.abs(charge - this.sentCharge) > 0.15 || (charge === 0 && this.sentCharge !== 0)) { this.sentCharge = charge; this.send({ t: 'charge', amount: charge }); }
     this.correction.scaleInPlace(Math.exp(-dt * 12));
     if (this.correction.lengthSquared() < 1e-6) this.correction.setAll(0);
     if (this.phase === 'countdown' || this.phase === 'ended') this.timer = Math.max(0, this.timer - dt);
