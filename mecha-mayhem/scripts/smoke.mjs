@@ -1,11 +1,15 @@
 import { chromium } from 'playwright';
 import { mkdir } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+const candidates = [process.env.MECHA_BROWSER, 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', '/opt/pw-browsers/chromium'].filter(Boolean);
+const executablePath = candidates.find(path => existsSync(path));
 
 const out = 'artifacts/smoke';
 await mkdir(out, { recursive: true });
 const browser = await chromium.launch({
   headless: true,
-  executablePath: 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+  executablePath,
+  
   args: ['--enable-webgl', '--use-angle=swiftshader', '--disable-gpu-sandbox'],
 });
 const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
