@@ -14,7 +14,7 @@ import {
   Vector3,
 } from '@babylonjs/core';
 import '@babylonjs/loaders/glTF';
-import type { WeaponId } from '../shared/weapons';
+import { MELEE_DURATION, type WeaponId } from '../shared/weapons';
 import type { MechPalette } from '../shared/palette';
 import type { HitZone } from '../shared/arena';
 import { DEFAULT_PARTS, normalizeParts, type MechPartConfig, type PartStyle } from '../shared/customization';
@@ -634,7 +634,8 @@ export function createMech(scene: Scene, palette: MechPalette, variant: MechVari
 
     if (punchTime > 0 && visual.weapon === 'sword' && !detached.has('rightArm')) {
       const t = 1 - punchTime / punchDuration;
-      const wind = smooth(t / .22), strike = smooth((t - .22) / .30), recover = 1 - smooth((t - .64) / .36);
+      // Strike window centred on MELEE_CONTACT.sword / MELEE_DURATION.sword (≈ 0.36).
+      const wind = smooth(t / .22), strike = smooth((t - .22) / .27), recover = 1 - smooth((t - .64) / .36);
       const sweep = (-1.05 * wind + 2.1 * strike) * recover * swingSide;
       armPivots[1].rotation.x = -.78 * wind * recover;
       armPivots[1].rotation.y = sweep;
@@ -646,7 +647,8 @@ export function createMech(scene: Scene, palette: MechPalette, variant: MechVari
       armPivots[0].rotation.z = -.35 * recover;
     } else if (punchTime > 0 && visual.weapon === 'hammer' && !detached.has('rightArm')) {
       const t = 1 - punchTime / punchDuration;
-      const wind = smooth(t / .36), strike = smooth((t - .36) / .23), recover = 1 - smooth((t - .64) / .36);
+      // Hammer lands at MELEE_CONTACT.hammer / MELEE_DURATION.hammer (≈ 0.47): long wind-up, fast drop.
+      const wind = smooth(t / .36), strike = smooth((t - .36) / .22), recover = 1 - smooth((t - .66) / .34);
       armPivots[1].rotation.x = (-2.15 * wind + 2.75 * strike) * recover;
       armPivots[1].rotation.y = -.2 * wind * recover;
       elbowPivots[1].rotation.x = -.6 * (1 - strike) * recover;
@@ -705,7 +707,7 @@ export function createMech(scene: Scene, palette: MechPalette, variant: MechVari
   function kick(amount: number) { recoil = Math.min(1, recoil + amount); }
   function punch() {
     swingSide *= -1;
-    punchDuration = visual.weapon === 'hammer' ? .78 : visual.weapon === 'sword' ? .42 : .38;
+    punchDuration = MELEE_DURATION[visual.weapon] ?? .38;
     punchTime = punchDuration;
   }
   function land(force: number) { landTime = 1; landForce = Math.min(1, force / 14); }

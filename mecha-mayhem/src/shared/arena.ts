@@ -7,7 +7,7 @@
 export type Vec3 = { x: number; y: number; z: number };
 export type Circle = { x: number; z: number; radius: number; name?: string };
 export type Bridge = { name: string; x: number; z: number; widthX: number; widthZ: number };
-export type Cover = { x: number; z: number; widthX: number; widthZ: number; height: number; id?: string; kind?: 'layout' | 'prop' | 'barricade' | 'block' | 'barrel' };
+export type Cover = { x: number; z: number; widthX: number; widthZ: number; height: number; id?: string; kind?: 'layout' | 'prop' | 'barricade' | 'block' | 'barrel' | 'pillar' | 'pipe' | 'dais' | 'wall' | 'ore' };
 export type Spawn = { x: number; y: number; z: number; yaw: number };
 export type ArenaLayout = {
   visualAsset: string;
@@ -41,6 +41,45 @@ export const BUILT_COVER: Cover[] = [
   { x: -1.45, z: -15.5, widthX: 1.3, widthZ: 1.3, height: 1.15, kind: 'block' },
   { x: 1.45, z: 15.5, widthX: 1.3, widthZ: 1.3, height: 1.15, kind: 'block' },
 ];
+
+/**
+ * Each arena gets its own central layout so the maps play differently.
+ * Every piece is real collision, cover, standable top and line-of-sight blocker
+ * on both the client and the authoritative server (same data, same functions).
+ */
+export type ArenaMapId = 'frozen' | 'refinery' | 'neon' | 'canyon';
+export const MAP_COVER: Record<ArenaMapId, Cover[]> = {
+  // Classic: four diagonal energy barricades and blocks on the bridges.
+  frozen: BUILT_COVER,
+  // Refinery: a tall distillation column in the middle (full cover) and four
+  // low pipe racks you can vault over, so fights rotate around the centre.
+  refinery: [
+    { x: 0, z: 0, widthX: 2.2, widthZ: 2.2, height: 3.2, kind: 'pillar' },
+    { x: 0, z: 5.6, widthX: 3.8, widthZ: 0.7, height: 0.95, kind: 'pipe' },
+    { x: 0, z: -5.6, widthX: 3.8, widthZ: 0.7, height: 0.95, kind: 'pipe' },
+    { x: 5.6, z: 0, widthX: 0.7, widthZ: 3.8, height: 0.95, kind: 'pipe' },
+    { x: -5.6, z: 0, widthX: 0.7, widthZ: 3.8, height: 0.95, kind: 'pipe' },
+  ],
+  // Neon dock: a raised central dais (king of the hill, jump to climb) ringed by
+  // four tall light walls that block sight lines across the plaza.
+  neon: [
+    { x: 0, z: 0, widthX: 5.6, widthZ: 5.6, height: 1.0, kind: 'dais' },
+    { x: 6.4, z: 6.4, widthX: 3.2, widthZ: 0.5, height: 2.4, kind: 'wall' },
+    { x: -6.4, z: -6.4, widthX: 3.2, widthZ: 0.5, height: 2.4, kind: 'wall' },
+    { x: 6.4, z: -6.4, widthX: 0.5, widthZ: 3.2, height: 2.4, kind: 'wall' },
+    { x: -6.4, z: 6.4, widthX: 0.5, widthZ: 3.2, height: 2.4, kind: 'wall' },
+  ],
+  // Canyon foundry: scattered ore blocks of different heights; the low ones are
+  // steps up to the high ones, giving short-range weapons alternative routes.
+  canyon: [
+    { x: 4.2, z: 6.2, widthX: 1.9, widthZ: 1.9, height: 1.7, kind: 'ore' },
+    { x: 5.9, z: 4.2, widthX: 1.4, widthZ: 1.4, height: 0.75, kind: 'ore' },
+    { x: -6.6, z: 3.1, widthX: 2.4, widthZ: 1.5, height: 1.05, kind: 'ore' },
+    { x: -3.4, z: -6.8, widthX: 1.7, widthZ: 2.5, height: 2.1, kind: 'ore' },
+    { x: -1.7, z: -5.1, widthX: 1.2, widthZ: 1.2, height: 0.9, kind: 'ore' },
+    { x: 7.1, z: -3.3, widthX: 1.5, widthZ: 1.5, height: 1.2, kind: 'ore' },
+  ],
+};
 
 export interface Arena {
   layout: ArenaLayout;
@@ -91,12 +130,12 @@ function rayBox(origin: Vec3, dir: Vec3, maxDistance: number, deckY: number, cov
   return near <= maxDistance ? near : null;
 }
 
-export function createArena(layout: ArenaLayout, options: { builtCover?: boolean } = {}): Arena {
+export function createArena(layout: ArenaLayout, options: { builtCover?: boolean; mapId?: ArenaMapId } = {}): Arena {
   const deckY = layout.deckTopY;
   const staticCover: Cover[] = [
     ...layout.cover.map((cover) => ({ ...cover, kind: 'layout' as const })),
     ...PROP_COVER,
-    ...(options.builtCover === false ? [] : BUILT_COVER),
+    ...(options.builtCover === false ? [] : MAP_COVER[options.mapId ?? 'frozen'] ?? BUILT_COVER),
   ];
   const dynamicCover: Cover[] = [];
   const allCover = () => staticCover.concat(dynamicCover);

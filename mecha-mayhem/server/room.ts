@@ -7,7 +7,7 @@ import { isPalette, type MechPalette } from '../src/shared/palette.ts';
 import { validateParts, type MechPartConfig } from '../src/shared/customization.ts';
 import { BOT_FILL, CORE_RULES, MODE_RULES, isTeamMode, type ClientMessage, type CoreState, type InputFrame, type MapId, type MatchPhase, type MissileSnap, type OnlineMode, type PlayerInfo, type PlayerSnap, type ServerMessage, type Team } from '../src/shared/protocol.ts';
 import { aimOrigin, applyPartDamage, applyShotCost, createMechState, damageTaken, energyCost, MOVE, stepMech, switchWeapon, weaponOperational, type MechState } from '../src/shared/sim.ts';
-import { WEAPONS, damageAtDistance, isWeaponId, laserDamage, laserEnergy, meleeDamage, meleeInArc, spreadDirections, type WeaponId } from '../src/shared/weapons.ts';
+import { MELEE_CONTACT, WEAPONS, damageAtDistance, isWeaponId, laserDamage, laserEnergy, meleeDamage, meleeInArc, spreadDirections, type WeaponId } from '../src/shared/weapons.ts';
 
 import { BotBrain, BotNav } from './bots.ts';
 
@@ -57,6 +57,7 @@ export class Room {
   phase: MatchPhase = 'waiting';
   timer = 0;
   private missiles: Missile[] = [];
+  private pendingMelee: Array<{ due: number; attacker: number; weapon: WeaponId; combo: number }> = [];
   private soloTime = 0;
   private teamScores: [number, number] = [0, 0];
   private coreOwner: Team = null;
@@ -77,7 +78,7 @@ export class Room {
     this.mode = mode;
     this.mapId = mapId;
     this.isPrivate = isPrivate;
-    this.arena = createArena(layout);
+    this.arena = createArena(layout, { mapId });
   }
 
   get rules() { return MODE_RULES[this.mode]; }
@@ -180,12 +181,23 @@ export class Room {
       if (!bot.bot || !bot.alive || !bot.brain || this.phase === 'ended') continue;
       const enemies = [...this.players.values()].filter((p) => p !== bot && p.alive && !this.sameTeam(bot, p) && p.state.invulnerable <= 0).map((p) => ({ id: p.id, state: p.state }));
       const needCore = this.mode === 'core' && (this.coreOwner !== bot.team || this.coreState === 'contested');
-      const objective = needCore ? { x: CORE_RULES.x + (Math.random() - 0.5) * 4, z: CORE_RULES.z + (Math.random() - 0.5) * 4 } : null;
+      const objective = needCore ? this.corePoint(bot.id) : null;
       const decision = bot.brain.decide(bot.state, { arena: this.arena, nav: this.botNav, time: t, enemies, objective, spawns });
       if (this.phase === 'countdown') { decision.input.mx = decision.input.mz = 0; decision.input.jump = false; }
       stepMech(bot.state, decision.input, dt, this.arena);
       if (decision.fire && this.phase !== 'countdown') this.fire(bot, { t: 'fire', ...decision.fire, seed: (Math.random() * 0xffffffff) >>> 0, rt: t });
     }
+  }
+
+  /** A walkable standing spot inside the core zone, stable per bot so they spread out. */
+  private corePoint(seed: number): { x: number; z: number } {
+    for (let i = 0; i < 12; i++) {
+      const a = seed * 2.399 + i * 0.52;
+      const r = 2.5 + ((seed * 7 + i) % 4);
+      const p = { x: CORE_RULES.x + Math.cos(a) * r, z: CORE_RULES.z + Math.sin(a) * r };
+      if (this.arena.canMoveTo(p.x, p.z, MOVE.radius) || this.arena.floorAt(p.x, p.z, MOVE.radius, this.arena.deckY + CORE_RULES.maxHeight) > this.arena.deckY) return p;
+    }
+    return { x: CORE_RULES.x, z: CORE_RULES.z - 4 };
   }
 
   /** Debug/test view of bots. */
@@ -270,23 +282,10 @@ export class Room {
     p.charge = 0;
 
     if (def.kind === 'melee') {
-      // The server owns the swing direction, combo, reach, cover test and damage.
-      // Client-supplied origin and direction cannot extend a melee attack.
-      const fx = Math.sin(s.yaw), fz = Math.cos(s.yaw);
-      const at = { x: s.x + fx * (def.id === 'hammer' ? 2.5 : 2.2), y: this.arena.deckY + 0.12, z: s.z + fz * (def.id === 'hammer' ? 2.5 : 2.2) };
-      this.broadcast({ t: 'shot', id: p.id, weapon: def.id, o: [round(s.x), round(s.y + 1.5), round(s.z)], ends: [[round(at.x), round(at.y), round(at.z)]], charge: s.meleeCombo }, p.id);
-      for (const victim of this.players.values()) {
-        if (victim.id === p.id || !victim.alive || this.sameTeam(p, victim)) continue;
-        const v = victim.state;
-        const center = { x: v.x, y: v.y + 1.6, z: v.z };
-        const arc = meleeInArc(s.yaw, s, v, def.range, def.id === 'sword' ? 0.9 : 0.72);
-        const shock = def.id === 'hammer' && v.grounded && Math.hypot(v.x - at.x, v.z - at.z) <= def.splashRadius && Math.abs(v.y - s.y) <= 2.6;
-        if ((!arc && !shock) || !this.arena.lineOfSight({ x: s.x, y: s.y + 1.6, z: s.z }, center)) continue;
-        const dist = Math.hypot(v.x - s.x, v.z - s.z) || 1;
-        v.pushX += (v.x - s.x) / dist * def.knockback * (arc ? 1 : 0.55);
-        v.pushZ += (v.z - s.z) / dist * def.knockback * (arc ? 1 : 0.55);
-        this.damage(victim, p, arc ? meleeDamage(def.id, s.meleeCombo - 1) : def.splashDamage, false, center, def.id);
-      }
+      // The server owns the swing: the wind-up is broadcast now and the contact is
+      // resolved MELEE_CONTACT seconds later, when the animation's strike lands.
+      this.broadcast({ t: 'shot', id: p.id, weapon: def.id, o: [round(s.x), round(s.y + 1.5), round(s.z)], ends: [], charge: s.meleeCombo }, p.id);
+      this.pendingMelee.push({ due: now() + (MELEE_CONTACT[def.id] ?? 0), attacker: p.id, weapon: def.id, combo: s.meleeCombo });
       return;
     }
 
@@ -342,6 +341,28 @@ export class Room {
       victim.state.pushX += info.push.x;
       victim.state.pushZ += info.push.z;
       this.damage(victim, p, info.amount, info.crit, info.at, def.id, info.zone);
+    }
+  }
+
+  /** Resolve a melee swing at its contact instant using the attacker's current position and facing. */
+  private resolveMelee(m: { attacker: number; weapon: WeaponId; combo: number }): void {
+    const p = this.players.get(m.attacker);
+    if (!p || !p.alive || !this.canFight()) return;
+    const s = p.state;
+    const def = WEAPONS[m.weapon];
+    const fx = Math.sin(s.yaw), fz = Math.cos(s.yaw);
+    const at = { x: s.x + fx * (def.id === 'hammer' ? 2.5 : 2.2), y: this.arena.deckY + 0.12, z: s.z + fz * (def.id === 'hammer' ? 2.5 : 2.2) };
+    for (const victim of this.players.values()) {
+      if (victim.id === p.id || !victim.alive || this.sameTeam(p, victim)) continue;
+      const v = victim.state;
+      const center = { x: v.x, y: v.y + 1.6, z: v.z };
+      const arc = meleeInArc(s.yaw, s, v, def.range, def.id === 'sword' ? 0.9 : 0.72);
+      const shock = def.id === 'hammer' && v.grounded && Math.hypot(v.x - at.x, v.z - at.z) <= def.splashRadius && Math.abs(v.y - s.y) <= 2.6;
+      if ((!arc && !shock) || !this.arena.lineOfSight({ x: s.x, y: s.y + 1.6, z: s.z }, center)) continue;
+      const dist = Math.hypot(v.x - s.x, v.z - s.z) || 1;
+      v.pushX += (v.x - s.x) / dist * def.knockback * (arc ? 1 : 0.55);
+      v.pushZ += (v.z - s.z) / dist * def.knockback * (arc ? 1 : 0.55);
+      this.damage(victim, p, arc ? meleeDamage(def.id, m.combo - 1) : def.splashDamage, false, center, def.id);
     }
   }
 
@@ -527,6 +548,9 @@ export class Room {
       while (p.history.length && p.history[0].t < t - 1) p.history.shift();
     }
     this.updateMissiles(dt);
+    for (let i = this.pendingMelee.length - 1; i >= 0; i--) {
+      if (t >= this.pendingMelee[i].due) this.resolveMelee(this.pendingMelee.splice(i, 1)[0]);
+    }
     if (this.phase === 'countdown') {
       this.timer -= dt;
       if (this.timer <= 0) this.startMatch();

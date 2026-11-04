@@ -94,6 +94,15 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
 
 export const WEAPON_ORDER: WeaponId[] = ['mg', 'shotgun', 'laser', 'missile', 'sword', 'hammer'];
 
+/**
+ * Seconds from the start of a melee swing to the moment the blade/hammer reaches
+ * the target. Damage (training and server) and impact effects happen at this
+ * instant, and the swing animation is timed so its strike peaks here.
+ */
+export const MELEE_CONTACT: Partial<Record<WeaponId, number>> = { sword: 0.15, hammer: 0.37 };
+/** Total swing animation length per weapon (seconds). */
+export const MELEE_DURATION: Partial<Record<WeaponId, number>> = { sword: 0.42, hammer: 0.78 };
+
 /** Server and client use the same sweep geometry, measured from the mech origin. */
 export function meleeInArc(yaw: number, from: { x: number; y: number; z: number }, to: { x: number; y: number; z: number }, reach: number, halfAngle: number): boolean {
   const dx = to.x - from.x, dz = to.z - from.z;

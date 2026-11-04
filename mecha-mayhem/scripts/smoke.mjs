@@ -10,7 +10,11 @@ import { existsSync } from 'node:fs';
 import { readFileSync } from 'node:fs';
 import { Room } from '../server/room.ts';
 import { createArena, rayMech } from '../src/shared/arena.ts';
-import { createMechState, applyPartDamage, damageTaken, stepMech, stepTrigger } from '../src/shared/sim.ts';
+import { createMechState, applyPartDamage, damageTaken, restoreParts, stepMech, stepTrigger, switchWeapon } from '../src/shared/sim.ts';
+import { computeLoadout } from '../src/shared/parts.ts';
+import { validateParts } from '../src/shared/customization.ts';
+import { MAP_COVER } from '../src/shared/arena.ts';
+import { BOT_FILL } from '../src/shared/protocol.ts';
 import { meleeInArc } from '../src/shared/weapons.ts';
 
 const out = 'artifacts/smoke';
@@ -67,17 +71,36 @@ meleeRoom.phase = 'playing';
 striker.state.x = 0; striker.state.z = 0; striker.state.y = arena.deckY; striker.state.yaw = 0; striker.state.fireCd = 0;
 target.state.x = 0; target.state.z = 3; target.state.y = arena.deckY; target.state.invulnerable = 0;
 const swing = { t: 'fire', weapon: 'sword', o: [999, 999, 999], d: [0, 0, -1], charge: 1, seed: 0, rt: 0 };
+const settle = async () => { await new Promise((r) => setTimeout(r, 220)); meleeRoom.tick(1 / 30); };
 meleeRoom.fire(striker, swing);
+check('online: dano da espada só no instante do contato (sincronizado com a animação)', target.state.health === 100);
+await settle();
 const firstHit = target.state.health;
 meleeRoom.fire(striker, swing);
+await settle();
 check('online: espada valida alcance, energia e cadência no servidor', firstHit < 100 && firstHit === target.state.health && striker.state.energy < 100);
 striker.state.fireCd = 0; target.state.z = 12;
 meleeRoom.fire(striker, swing);
+await settle();
 check('online: espada não atinge alvo fora do alcance', target.state.health === firstHit);
 const solo = new Room('TEST', 'ffa', false, frozenLayout);
 solo.join(noop, 'HUMANO', 'arctic', 'mg');
 for (let i = 0; i < 82; i++) solo.tick(1 / 30);
-check('online: sala pública solo recebe bot do servidor', solo.players.size === 2 && [...solo.players.values()].some((p) => p.bot));
+check('online: sala pública solo recebe bots do servidor', solo.players.size === BOT_FILL.ffa && [...solo.players.values()].some((p) => p.bot));
+solo.join(noop, 'HUMANO 2', 'ember', 'mg');
+check('online: humano substitui um bot (vaga não fica presa)', solo.players.size === BOT_FILL.ffa && solo.humans === 2);
+// Team 5v5 with bots: balanced teams, bots keep moving (no permanent stuck).
+const big = new Room('BIG5', 'team5', false, frozenLayout);
+big.join(noop, 'HUMANO', 'arctic', 'mg');
+for (let i = 0; i < 90; i++) big.tick(1 / 30);
+const blueCount = [...big.players.values()].filter((p) => p.team === 'blue').length;
+check('times 5v5: bots completam equipes equilibradas', big.players.size === 10 && blueCount === 5);
+big.phase = 'playing'; big.timer = 300;
+const startPos = new Map([...big.players.values()].filter((p) => p.bot).map((p) => [p.id, { x: p.state.x, z: p.state.z }]));
+for (let i = 0; i < 300; i++) big.tick(1 / 30);
+const moved = [...big.players.values()].filter((p) => p.bot && startPos.has(p.id) && Math.hypot(p.state.x - startPos.get(p.id).x, p.state.z - startPos.get(p.id).z) > 3).length;
+const stuck = big.botStatus().reduce((m, b) => Math.max(m, b.stuck), 0);
+check('bots: navegam pelo mapa sem travar', moved >= 6 && stuck <= 6, `${moved}/9 se moveram · máx. travamentos ${stuck}`);
 const teams = new Room('TEAM', 'team2', true, frozenLayout);
 const first = teams.join(noop, 'A', 'arctic', 'mg');
 const second = teams.join(noop, 'B', 'ember', 'mg');
@@ -90,8 +113,39 @@ const capturer = core.join(noop, 'A', 'arctic', 'mg');
 core.join(noop, 'B', 'ember', 'mg');
 core.phase = 'playing'; core.timer = 100;
 capturer.state.x = 0; capturer.state.z = 0;
-core.tick(1 / 30);
+for (let i = 0; i < 100; i++) { capturer.state.x = 0; capturer.state.z = 0; core.tick(1 / 30); }
 check('Core Control: servidor atribui pontos ao time no centro', core.coreOwner === capturer.team && core.teamScores[capturer.team === 'blue' ? 0 : 1] > 0);
+const hover = new Room('HOVR', 'core', true, frozenLayout);
+const hoverer = hover.join(noop, 'A', 'arctic', 'mg');
+hover.join(noop, 'B', 'ember', 'mg');
+hover.phase = 'playing'; hover.timer = 100;
+for (let i = 0; i < 100; i++) { hoverer.state.x = 0; hoverer.state.z = 0; hoverer.state.y = arena.deckY + 4; hoverer.state.grounded = false; hover.tick(1 / 30); }
+check('Core Control: jato acima do núcleo não pontua', hover.coreOwner === null && hover.teamScores[0] === 0 && hover.teamScores[1] === 0);
+// Team result: every member of the winning team wins.
+teams.phase = 'playing';
+teams.teamScores = [5, 2];
+check('resultado: equipe vencedora inteira recebe vitória; empate reconhecido', teams.outcome().winnerTeam === 'blue' && (teams.teamScores = [3, 3], teams.outcome().winnerTeam === 'draw'));
+// Laser with a destroyed right arm cannot even charge.
+const laserArm = createMechState(0, arena.deckY, 0, 0, 'laser');
+applyPartDamage(laserArm, 'rightArm', 999);
+stepTrigger(laserArm, true, 0.5);
+check('correção: laser não carrega nem dispara com braço destruído', laserArm.charge === 0 && stepTrigger(laserArm, false, 1 / 30) === null);
+restoreParts(laserArm);
+check('correção: reparo restaura membros e arma', laserArm.parts.rightArm > 0 && stepTrigger(laserArm, true, 0.3) === null && laserArm.charge > 0);
+// Modular chassis: stats from the catalog drive the shared simulation; server rejects overloads.
+const light = computeLoadout({ head: 'scout', torso: 'scout', legs: 'scout' }, 'mg');
+const heavy = computeLoadout({ head: 'titan', torso: 'titan', legs: 'titan' }, 'mg');
+const over = computeLoadout({ head: 'titan', torso: 'titan', legs: 'scout' }, 'hammer');
+check('peças: leve é mais rápido, pesado recebe menos dano', light.speedMul > 1 && heavy.speedMul < 1 && heavy.damageMul < light.damageMul, `leve ${light.speed} m/s · pesado ${heavy.speed} m/s`);
+check('peças: sobrecarga acima de 135% é rejeitada pelo servidor', over.rejected && validateParts({ head: 'titan', torso: 'titan', legs: 'scout' }, 'hammer').legs === 'striker');
+const runner = createMechState(0, arena.deckY, 0, 0, 'mg', { head: 'scout', torso: 'scout', legs: 'scout' });
+const tank = createMechState(0, arena.deckY, 0, 0, 'mg', { head: 'titan', torso: 'titan', legs: 'titan' });
+for (let i = 0; i < 60; i++) { stepMech(runner, { mx: 0, mz: 1, yaw: 0, pitch: 0, sprint: false, jump: false, dash: false, shield: false }, 1 / 30, arena); stepMech(tank, { mx: 0, mz: 1, yaw: 0, pitch: 0, sprint: false, jump: false, dash: false, shield: false }, 1 / 30, arena); }
+check('peças: atributos aplicados na simulação compartilhada', runner.z > tank.z + 1 && damageTaken(tank, 10) < damageTaken(runner, 10));
+const swap = createMechState(0, arena.deckY, 0, 0, 'mg');
+switchWeapon(swap, 'hammer');
+check('peças: peso da arma entra na carga', swap.loadout.legsLoad > createMechState(0, arena.deckY, 0, 0, 'mg').loadout.legsLoad);
+check('mapas: cada arena tem coberturas centrais próprias', new Set(Object.values(MAP_COVER).map((c) => JSON.stringify(c))).size === 4);
 const refinery = createArena(refineryLayout);
 check('segundo mapa: layout de refinaria tem pontes e coberturas', refinery.layout.visualAsset === 'procedural:refinery' && refinery.layout.bridges.length === 4 && refinery.staticCover.length > 8);
 function watch(page, label) {
@@ -118,9 +172,23 @@ try {
   check('lobby: quatro arenas e preparação da missão', await page.locator('#lobby-maps .map-card').count() === 4 && await page.locator('#lobby-launch').isVisible());
   await page.screenshot({ path: `${out}/lobby.png` });
   await page.locator('#lobby-customize').click();
-  await page.locator('#part-head').selectOption('scout');
-  await page.locator('#part-torso').selectOption('titan');
-  await page.locator('#part-legs').selectOption('titan');
+  await page.locator('.part-tab[data-slot="head"]').click();
+  await page.locator('.part-card[data-family="scout"]').click();
+  await page.locator('.part-tab[data-slot="torso"]').click();
+  await page.locator('.part-card[data-family="titan"]').click();
+  await page.locator('.part-tab[data-slot="legs"]').click();
+  await page.locator('.part-card[data-family="titan"]').click();
+  const statsText = await page.locator('#chassis-stats').textContent();
+  check('oficina: peso, sustentação, integridade, blindagem, energia e velocidade visíveis fora das imagens', ['PESO TOTAL', 'INTEGRIDADE', 'BLINDAGEM', 'ENERGIA', 'VELOCIDADE', 'PERNAS', 'TRONCO'].every((k) => statsText.includes(k)));
+  // Titan head + Titan torso + MG on Scout legs = 140% of capacity (limit 135%).
+  await page.locator('.part-card[data-family="scout"]').click();
+  await page.locator('.part-tab[data-slot="head"]').click();
+  await page.locator('.part-card[data-family="titan"]').click();
+  check('oficina: sobrecarga acima do limite bloqueia a partida', await page.locator('#garage-play').isDisabled() && (await page.locator('#chassis-stats').textContent()).includes('EXCEDE'));
+  await page.screenshot({ path: `${out}/customization-overload.png` });
+  await page.locator('.part-card[data-family="scout"]').click();
+  await page.locator('.part-tab[data-slot="legs"]').click();
+  await page.locator('.part-card[data-family="titan"]').click();
   const customized = await page.evaluate(() => ({ parts: window.__mecha.player.root.metadata.parts, saved: JSON.parse(localStorage.getItem('mecha-mayhem:parts')) }));
   check('oficina: peças aplicadas e salvas', customized.parts.head === 'scout' && customized.parts.torso === 'titan' && customized.parts.legs === 'titan' && customized.saved.torso === 'titan');
   await page.screenshot({ path: `${out}/customization.png` });

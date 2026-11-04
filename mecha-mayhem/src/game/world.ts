@@ -20,7 +20,7 @@ import {
   Vector3,
 } from '@babylonjs/core';
 import '@babylonjs/loaders/glTF';
-import { BUILT_COVER, createArena, type Arena, type ArenaLayout, type Cover } from '../shared/arena';
+import { MAP_COVER, createArena, type Arena, type ArenaLayout, type Cover } from '../shared/arena';
 import { flareTexture } from './fx';
 import { MAPS, type MapId } from '../shared/maps';
 import { createWorldGraphics } from './worldGraphics';
@@ -153,7 +153,14 @@ export async function createWorld(scene: Scene, onProgress?: (label: string) => 
   const response = await fetch(`/assets/models/${MAPS[mapId].layoutFile}`);
   if (!response.ok) throw new Error(`${MAPS[mapId].name} layout: HTTP ${response.status}`);
   const layout = await response.json() as ArenaLayout;
-  const arena = createArena(layout);
+  const arena = createArena(layout, { mapId });
+  /** Training start: arena centre, on top of a low dais or beside a tall centrepiece. */
+  const trainingSpawn = (): Vector3 => {
+    let z = 0;
+    const tall = arena.staticCover.some((c) => c.height > 1.2 && Math.abs(c.x) < c.widthX / 2 + 1 && Math.abs(c.z) < c.widthZ / 2 + 1);
+    if (tall) z = -layout.centralArena.radius * 0.78;
+    return new Vector3(0, arena.floorAt(0, z, 0.8, deckY + 1.2), z);
+  };
   const deckY = layout.deckTopY;
 
   onProgress?.(`Montando ${MAPS[mapId].name} em 3D`);
@@ -252,7 +259,7 @@ export async function createWorld(scene: Scene, onProgress?: (label: string) => 
   const hazard = material(scene, 'barricade-hazard', '#e8722f', false, 0.2);
   const strip = material(scene, 'barricade-strip', '#61e8ff', true);
   const accentMaterials: StandardMaterial[] = [strip];
-  for (const [i, c] of BUILT_COVER.entries()) {
+  for (const [i, c] of MAP_COVER[mapId].entries()) {
     const root = new TransformNode(`cover-visual-${i}`, scene);
     root.position.set(c.x, deckY, c.z);
     const alongX = c.widthX >= c.widthZ;
@@ -277,6 +284,73 @@ export async function createWorld(scene: Scene, onProgress?: (label: string) => 
           add(stripe, hazard);
         }
       }
+    } else if (c.kind === 'pillar') {
+      // Distillation column: boxy core (matches the collision box) with banded rings and a beacon.
+      const body = MeshBuilder.CreateBox(`pillar-${i}`, { width: c.widthX, depth: c.widthZ, height: c.height }, scene);
+      body.position.y = c.height / 2;
+      add(body, plateLight);
+      for (let k = 1; k <= 3; k++) {
+        const band = MeshBuilder.CreateBox(`pillar-band-${i}-${k}`, { width: c.widthX + 0.06, depth: c.widthZ + 0.06, height: 0.12 }, scene);
+        band.position.y = c.height * k / 4;
+        add(band, k === 2 ? strip : hazard);
+      }
+      const cap = MeshBuilder.CreateCylinder(`pillar-cap-${i}`, { diameter: Math.min(c.widthX, c.widthZ) * 0.8, height: 0.5, tessellation: 12 }, scene);
+      cap.position.y = c.height + 0.25;
+      add(cap, plate);
+      const beacon = MeshBuilder.CreateSphere(`pillar-beacon-${i}`, { diameter: 0.45, segments: 8 }, scene);
+      beacon.position.y = c.height + 0.65;
+      add(beacon, strip);
+    } else if (c.kind === 'pipe') {
+      // Pipe rack: two horizontal pipes on short legs; low enough to vault over.
+      const along = alongX ? 'x' : 'z';
+      for (const offset of [-0.17, 0.17]) {
+        const pipe = MeshBuilder.CreateCylinder(`pipe-${i}-${offset}`, { diameter: 0.32, height: long, tessellation: 12 }, scene);
+        pipe.rotation[along === 'x' ? 'z' : 'x'] = Math.PI / 2;
+        pipe.position.set(alongX ? 0 : offset, c.height - 0.2, alongX ? offset : 0);
+        add(pipe, offset < 0 ? hazard : plateLight);
+      }
+      for (const k of [-1, 0, 1]) {
+        const leg = MeshBuilder.CreateBox(`pipe-leg-${i}-${k}`, { width: alongX ? 0.14 : thin, depth: alongX ? thin : 0.14, height: c.height - 0.2 }, scene);
+        leg.position.set(alongX ? k * long * 0.42 : 0, (c.height - 0.2) / 2, alongX ? 0 : k * long * 0.42);
+        add(leg, plate);
+      }
+      const valve = MeshBuilder.CreateTorus(`pipe-valve-${i}`, { diameter: 0.42, thickness: 0.06, tessellation: 16 }, scene);
+      valve.position.y = c.height;
+      add(valve, strip);
+    } else if (c.kind === 'dais') {
+      // Raised plaza: two-tone slab, glowing edge, beveled lip.
+      const body = MeshBuilder.CreateBox(`dais-${i}`, { width: c.widthX, depth: c.widthZ, height: c.height }, scene);
+      body.position.y = c.height / 2;
+      add(body, plate);
+      const top = MeshBuilder.CreateBox(`dais-top-${i}`, { width: c.widthX - 0.5, depth: c.widthZ - 0.5, height: 0.04 }, scene);
+      top.position.y = c.height + 0.02;
+      add(top, plateLight);
+      for (const side of [-1, 1]) for (const axis of ['x', 'z'] as const) {
+        const edge = MeshBuilder.CreateBox(`dais-edge-${i}-${axis}-${side}`, { width: axis === 'x' ? c.widthX : 0.06, depth: axis === 'x' ? 0.06 : c.widthZ, height: 0.08 }, scene);
+        edge.position.set(axis === 'x' ? 0 : side * c.widthX / 2, c.height - 0.04, axis === 'x' ? side * c.widthZ / 2 : 0);
+        add(edge, strip);
+      }
+    } else if (c.kind === 'wall') {
+      // Neon light wall: dark frame with two bright horizontal tubes.
+      const body = MeshBuilder.CreateBox(`wall-${i}`, { width: c.widthX, depth: c.widthZ, height: c.height }, scene);
+      body.position.y = c.height / 2;
+      add(body, plate);
+      for (const h of [0.45, 0.78]) for (const side of [-1, 1]) {
+        const tube = MeshBuilder.CreateBox(`wall-tube-${i}-${h}-${side}`, { width: alongX ? long * 0.9 : 0.04, depth: alongX ? 0.04 : long * 0.9, height: 0.07 }, scene);
+        tube.position.set(alongX ? 0 : side * (thin / 2 + 0.02), c.height * h, alongX ? side * (thin / 2 + 0.02) : 0);
+        add(tube, strip);
+      }
+    } else if (c.kind === 'ore') {
+      // Ore block: rough two-tone rock with glowing veins.
+      const body = MeshBuilder.CreateBox(`ore-${i}`, { width: c.widthX, depth: c.widthZ, height: c.height }, scene);
+      body.position.y = c.height / 2;
+      add(body, hazard);
+      const cap = MeshBuilder.CreateBox(`ore-cap-${i}`, { width: c.widthX * 0.86, depth: c.widthZ * 0.86, height: 0.14 }, scene);
+      cap.position.y = c.height + 0.05;
+      add(cap, plate);
+      const vein = MeshBuilder.CreateBox(`ore-vein-${i}`, { width: c.widthX + 0.03, depth: c.widthZ + 0.03, height: 0.06 }, scene);
+      vein.position.y = c.height * 0.45;
+      add(vein, strip);
     } else {
       const body = MeshBuilder.CreateBox(`block-${i}`, { width: c.widthX, depth: c.widthZ, height: c.height }, scene);
       body.position.y = c.height / 2;
@@ -479,7 +553,7 @@ export async function createWorld(scene: Scene, onProgress?: (label: string) => 
 
   const world: World = {
     arena,
-    spawn: new Vector3(0, deckY, 0),
+    spawn: trainingSpawn(),
     deckY,
     shadows,
     get theme() { return theme; },

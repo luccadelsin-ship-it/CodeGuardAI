@@ -1,0 +1,196 @@
+{
+  "service": "Triverse image-to-3D",
+  "settings": {
+    "textureSize": 1024,
+    "targetFaces": 500000
+  },
+  "status": "blocked: no TRIVERSE_API_KEY or account access in this environment; nothing submitted, no credits spent",
+  "runtimeLod": "after download: keep 500K source in assets/triverse/source/, export a decimated GLB (~15-25K faces, 1K texture) to public/assets/modular/models/; origin at connector (neck socket / waist), +Z forward, metres",
+  "connectors": {
+    "heads": "neck socket at origin, bottom",
+    "torsos": "waist connector at origin; neck socket top",
+    "legs": "feet on y=0; waist connector on top"
+  },
+  "jobs": [
+    {
+      "id": "heads-scout",
+      "image": "/assets/modular/heads/scout.jpg",
+      "imageReady": true,
+      "command": "python scripts/triverse_batch.py --only heads/scout --approve heads/scout --execute-paid-tasks --max-total-credits 35"
+    },
+    {
+      "id": "torsos-scout",
+      "image": "/assets/modular/torsos/scout.jpg",
+      "imageReady": true,
+      "command": "python scripts/triverse_batch.py --only torsos/scout --approve torsos/scout --execute-paid-tasks --max-total-credits 35"
+    },
+    {
+      "id": "legs-scout",
+      "image": "/assets/modular/legs/scout.jpg",
+      "imageReady": true,
+      "command": "python scripts/triverse_batch.py --only legs/scout --approve legs/scout --execute-paid-tasks --max-total-credits 35"
+    },
+    {
+      "id": "heads-striker",
+      "image": "/assets/modular/heads/striker.jpg",
+      "imageReady": true,
+      "command": "python scripts/triverse_batch.py --only heads/striker --approve heads/striker --execute-paid-tasks --max-total-credits 35"
+    },
+    {
+      "id": "torsos-striker",
+      "image": "/assets/modular/torsos/striker.jpg",
+      "imageReady": true,
+      "command": "python scripts/triverse_batch.py --only torsos/striker --approve torsos/striker --execute-paid-tasks --max-total-credits 35"
+    },
+    {
+      "id": "legs-striker",
+      "image": "/assets/modular/legs/striker.jpg",
+      "imageReady": true,
+      "command": "python scripts/triverse_batch.py --only legs/striker --approve legs/striker --execute-paid-tasks --max-total-credits 35"
+    },
+    {
+      "id": "heads-titan",
+      "image": "/assets/modular/heads/titan.jpg",
+      "imageReady": true,
+      "command": "python scripts/triverse_batch.py --only heads/titan --approve heads/titan --execute-paid-tasks --max-total-credits 35"
+    },
+    {
+      "id": "torsos-titan",
+      "image": "/assets/modular/torsos/titan.jpg",
+      "imageReady": true,
+      "command": "python scripts/triverse_batch.py --only torsos/titan --approve torsos/titan --execute-paid-tasks --max-total-credits 35"
+    },
+    {
+      "id": "legs-titan",
+      "image": "/assets/modular/legs/titan.jpg",
+      "imageReady": true,
+      "command": "python scripts/triverse_batch.py --only legs/titan --approve legs/titan --execute-paid-tasks --max-total-credits 35"
+    },
+    {
+      "id": "heads-phantom",
+      "image": "/assets/modular/heads/phantom.jpg",
+      "imageReady": true,
+      "command": "python scripts/triverse_batch.py --only heads/phantom --approve heads/phantom --execute-paid-tasks --max-total-credits 35"
+    },
+    {
+      "id": "torsos-phantom",
+      "image": "/assets/modular/torsos/phantom.jpg",
+      "imageReady": true,
+      "command": "python scripts/triverse_batch.py --only torsos/phantom --approve torsos/phantom --execute-paid-tasks --max-total-credits 35"
+    },
+    {
+      "id": "legs-phantom",
+      "image": "/assets/modular/legs/phantom.jpg",
+      "imageReady": true,
+      "command": "python scripts/triverse_batch.py --only legs/phantom --approve legs/phantom --execute-paid-tasks --max-total-credits 35"
+    },
+    {
+      "id": "heads-industrial",
+      "image": "/assets/modular/heads/industrial.jpg",
+      "imageReady": true,
+      "command": "python scripts/triverse_batch.py --only heads/industrial --approve heads/industrial --execute-paid-tasks --max-total-credits 35"
+    },
+    {
+      "id": "torsos-industrial",
+      "image": "/assets/modular/torsos/industrial.jpg",
+      "imageReady": true,
+      "command": "python scripts/triverse_batch.py --only torsos/industrial --approve torsos/industrial --execute-paid-tasks --max-total-credits 35"
+    },
+    {
+      "id": "legs-industrial",
+      "image": "/assets/modular/legs/industrial.jpg",
+      "imageReady": true,
+      "command": "python scripts/triverse_batch.py --only legs/industrial --approve legs/industrial --execute-paid-tasks --max-total-credits 35"
+    },
+    {
+      "id": "heads-spectre",
+      "image": "/assets/modular/heads/spectre.jpg",
+      "imageReady": true,
+      "command": "python scripts/triverse_batch.py --only heads/spectre --approve heads/spectre --execute-paid-tasks --max-total-credits 35"
+    },
+    {
+      "id": "torsos-spectre",
+      "image": "/assets/modular/torsos/spectre.jpg",
+      "imageReady": true,
+      "command": "python scripts/triverse_batch.py --only torsos/spectre --approve torsos/spectre --execute-paid-tasks --max-total-credits 35"
+    },
+    {
+      "id": "legs-spectre",
+      "image": null,
+      "imageReady": false,
+      "command": "python scripts/triverse_batch.py --only legs/spectre --approve legs/spectre --execute-paid-tasks --max-total-credits 35"
+    },
+    {
+      "id": "heads-vanguard",
+      "image": null,
+      "imageReady": false,
+      "command": "python scripts/triverse_batch.py --only heads/vanguard --approve heads/vanguard --execute-paid-tasks --max-total-credits 35"
+    },
+    {
+      "id": "torsos-vanguard",
+      "image": null,
+      "imageReady": false,
+      "command": "python scripts/triverse_batch.py --only torsos/vanguard --approve torsos/vanguard --execute-paid-tasks --max-total-credits 35"
+    },
+    {
+      "id": "legs-vanguard",
+      "image": null,
+      "imageReady": false,
+      "command": "python scripts/triverse_batch.py --only legs/vanguard --approve legs/vanguard --execute-paid-tasks --max-total-credits 35"
+    },
+    {
+      "id": "heads-ronin",
+      "image": null,
+      "imageReady": false,
+      "command": "python scripts/triverse_batch.py --only heads/ronin --approve heads/ronin --execute-paid-tasks --max-total-credits 35"
+    },
+    {
+      "id": "torsos-ronin",
+      "image": null,
+      "imageReady": false,
+      "command": "python scripts/triverse_batch.py --only torsos/ronin --approve torsos/ronin --execute-paid-tasks --max-total-credits 35"
+    },
+    {
+      "id": "legs-ronin",
+      "image": null,
+      "imageReady": false,
+      "command": "python scripts/triverse_batch.py --only legs/ronin --approve legs/ronin --execute-paid-tasks --max-total-credits 35"
+    },
+    {
+      "id": "heads-warden",
+      "image": null,
+      "imageReady": false,
+      "command": "python scripts/triverse_batch.py --only heads/warden --approve heads/warden --execute-paid-tasks --max-total-credits 35"
+    },
+    {
+      "id": "torsos-warden",
+      "image": null,
+      "imageReady": false,
+      "command": "python scripts/triverse_batch.py --only torsos/warden --approve torsos/warden --execute-paid-tasks --max-total-credits 35"
+    },
+    {
+      "id": "legs-warden",
+      "image": null,
+      "imageReady": false,
+      "command": "python scripts/triverse_batch.py --only legs/warden --approve legs/warden --execute-paid-tasks --max-total-credits 35"
+    },
+    {
+      "id": "heads-tempest",
+      "image": null,
+      "imageReady": false,
+      "command": "python scripts/triverse_batch.py --only heads/tempest --approve heads/tempest --execute-paid-tasks --max-total-credits 35"
+    },
+    {
+      "id": "torsos-tempest",
+      "image": null,
+      "imageReady": false,
+      "command": "python scripts/triverse_batch.py --only torsos/tempest --approve torsos/tempest --execute-paid-tasks --max-total-credits 35"
+    },
+    {
+      "id": "legs-tempest",
+      "image": null,
+      "imageReady": false,
+      "command": "python scripts/triverse_batch.py --only legs/tempest --approve legs/tempest --execute-paid-tasks --max-total-credits 35"
+    }
+  ]
+}

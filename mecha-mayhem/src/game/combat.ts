@@ -18,7 +18,7 @@ import {
 import { rayMech, raySphere, type Cover, type HitZone } from '../shared/arena';
 import { aimOrigin, applyPartDamage, createMechState, restoreParts, stepMech, stepTrigger, switchWeapon, damageTaken, weaponOperational, MOVE, type FireCommand, type MechInput, type MechState } from '../shared/sim';
 import { DEFAULT_PARTS, type MechPartConfig } from '../shared/customization';
-import { WEAPONS, WEAPON_ORDER, damageAtDistance, laserDamage, meleeDamage, meleeInArc, spreadDirections, type WeaponId } from '../shared/weapons';
+import { MELEE_CONTACT, WEAPONS, WEAPON_ORDER, damageAtDistance, laserDamage, meleeDamage, meleeInArc, spreadDirections, type WeaponId } from '../shared/weapons';
 import { Sfx } from './audio';
 import { DIFFICULTIES, ENEMY_DEFS, Enemy, type AiContext, type Difficulty, type EnemyType, type ProjectileOptions } from './drones';
 import { Fx } from './fx';
@@ -185,6 +185,7 @@ export class CombatGame {
   private playerDown = false;
   private lastHurt = 0;
   private disabledWarn = -9;
+  private pendingMelee: Array<{ due: number; weapon: WeaponId; combo: number }> = [];
 
   constructor(
     private readonly scene: Scene,
@@ -396,6 +397,7 @@ export class CombatGame {
   }
 
   private clearCombat(): void {
+    this.pendingMelee.length = 0;
     for (const enemy of this.enemies) enemy.dispose();
     this.enemies.length = 0;
     for (const d of this.dying) d.enemy.dispose();
@@ -596,6 +598,9 @@ export class CombatGame {
         this.keyboardAttack.ttl -= dt;
         if (this.keyboardAttack.ttl <= 0) this.keyboardAttack = null;
       }
+      for (let i = this.pendingMelee.length - 1; i >= 0; i--) {
+        if (this.time >= this.pendingMelee[i].due) { const m = this.pendingMelee.splice(i, 1)[0]; this.resolveMelee(m); }
+      }
       const fire = stepTrigger(s, firing, dt);
       if (firing && !weaponOperational(s) && this.time - this.disabledWarn > 1.6) {
         this.disabledWarn = this.time;
@@ -715,27 +720,12 @@ export class CombatGame {
     this.stats.shots++;
 
     if (def.kind === 'melee') {
-      const base = new Vector3(this.state.x, this.state.y, this.state.z);
-      const forward = new Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw));
-      const impact = base.add(forward.scale(def.id === 'hammer' ? 2.5 : 2.2));
-      impact.y = this.world.deckY + 0.12;
+      // Wind-up now; the contact (damage + impact effects) happens at MELEE_CONTACT,
+      // exactly when the animation's strike lands. The server uses the same delay.
       this.player.punch();
-      this.sfx.impact();
-      this.fx.shockwave(impact, def.id === 'hammer' ? def.splashRadius : 3.1, def.color, 0.3, def.id === 'hammer' ? 0.34 : 0.12);
-      this.fx.sparks(impact.add(new Vector3(0, 1.1, 0)), def.color, def.id === 'hammer' ? 22 : 14, 1.1);
-      if (this.session === 'online') { this.online?.fire(cmd, origin, dir, seed); return; }
-      let hit = false;
-      for (const enemy of this.enemies) {
-        if (!enemy.alive) continue;
-        const target = enemy.position;
-        const arc = meleeInArc(this.yaw, base, target, def.range + enemy.scale * 0.4, def.id === 'sword' ? 0.9 : 0.72);
-        const shock = def.id === 'hammer' && enemy.position.y <= this.world.deckY + 2.6 && Vector3.Distance(new Vector3(target.x, impact.y, target.z), impact) <= def.splashRadius;
-        if ((!arc && !shock) || !this.world.arena.lineOfSight(base.add(new Vector3(0, 1.6, 0)), enemy.center)) continue;
-        const amount = arc ? meleeDamage(def.id, this.state.meleeCombo - 1) : def.splashDamage;
-        this.damageEnemy(enemy, amount, false, enemy.center, def.knockback * (arc ? 1 : 0.55), base);
-        hit = true;
-      }
-      if (hit) this.stats.hits++;
+      this.sfx.dash();
+      if (this.session === 'online') this.online?.fire(cmd, origin, dir, seed);
+      this.pendingMelee.push({ due: this.time + (MELEE_CONTACT[def.id] ?? 0), weapon: def.id, combo: this.state.meleeCombo });
       return;
     }
 
@@ -811,6 +801,34 @@ export class CombatGame {
     }
     if (damageByTarget.size) this.stats.hits++;
     for (const [enemy, info] of damageByTarget) this.damageEnemy(enemy, info.amount, info.crit, info.at, def.knockback * Math.min(1, info.amount / (def.damage * def.pellets * 0.6)), origin, info.zone);
+  }
+
+  /** Melee contact: same reach, arc, cover and damage rules as the server, at the strike instant. */
+  private resolveMelee(m: { weapon: WeaponId; combo: number }): void {
+    const def = WEAPONS[m.weapon];
+    if (this.playerDown) return;
+    const base = new Vector3(this.state.x, this.state.y, this.state.z);
+    const forward = new Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw));
+    const impact = base.add(forward.scale(def.id === 'hammer' ? 2.5 : 2.2));
+    impact.y = this.world.deckY + 0.12;
+    this.sfx.impact();
+    this.fx.shake(def.shake);
+    this.fx.shockwave(impact, def.id === 'hammer' ? def.splashRadius : 3.1, def.color, 0.3, def.id === 'hammer' ? 0.34 : 0.12);
+    this.fx.sparks(impact.add(new Vector3(0, 1.1, 0)), def.color, def.id === 'hammer' ? 22 : 14, 1.1);
+    if (this.session === 'online') return;
+    this.state.meleeCombo = m.combo;
+    let hit = false;
+    for (const enemy of this.enemies) {
+      if (!enemy.alive) continue;
+      const target = enemy.position;
+      const arc = meleeInArc(this.yaw, base, target, def.range + enemy.scale * 0.4, def.id === 'sword' ? 0.9 : 0.72);
+      const shock = def.id === 'hammer' && enemy.position.y <= this.world.deckY + 2.6 && Vector3.Distance(new Vector3(target.x, impact.y, target.z), impact) <= def.splashRadius;
+      if ((!arc && !shock) || !this.world.arena.lineOfSight(base.add(new Vector3(0, 1.6, 0)), enemy.center)) continue;
+      const amount = arc ? meleeDamage(def.id, this.state.meleeCombo - 1) : def.splashDamage;
+      this.damageEnemy(enemy, amount, false, enemy.center, def.knockback * (arc ? 1 : 0.55), base);
+      hit = true;
+    }
+    if (hit) this.stats.hits++;
   }
 
   private findLock(origin: Vector3, dir: Vector3): Enemy | null {

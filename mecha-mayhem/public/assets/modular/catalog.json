@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "balanceStatus": "proposed-not-applied-to-authoritative-simulation",
+  "balanceStatus": "applied: src/shared/parts.ts (shared simulation + server validation)",
   "units": {
     "weightKg": "kg",
     "supportCapacityKg": "kg of attached load; excludes this part own weight",

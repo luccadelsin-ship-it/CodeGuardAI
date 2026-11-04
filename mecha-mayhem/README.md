@@ -1,6 +1,26 @@
-# Mecha Mayhem — Fase 3 · Lobby e arenas
+# Mecha Mayhem — Fase 4 · Peças modulares e equipes
 
 Jogo 3D de batalha de robôs no navegador, feito com **Babylon.js**, **TypeScript**, **Vite** e **Havok Physics**, agora com **modo online** em servidor autoritativo. O mapa Frozen Outpost foi modelado no Blender; cinco objetos de ambiente vieram do Sketchfab (atribuição no menu e em [`public/assets/sketchfab/ATTRIBUTION.md`](public/assets/sketchfab/ATTRIBUTION.md)).
+
+## Fase 4 (esta entrega)
+
+- **Peças modulares com atributos reais** (`src/shared/parts.ts`): 10 famílias × cabeça / tronco+braços / pernas, com peso, sustentação, integridade, blindagem, energia e velocidade vindos de `public/assets/modular/catalog.json`. Oficina com abas por peça, prévia da imagem (17/30 prontas; as demais mostram "REF. PENDENTE") e painel de estatísticas fora das imagens.
+- **Carga e sobrepeso**: pernas sustentam cabeça + tronco + arma; o tronco sustenta cabeça + arma. Até 100% sem penalidade; 100–135% = sobrecarga (velocidade, pulo e jato menores, energia mais cara); acima de 135% a oficina bloqueia a partida e o servidor troca o chassi pelo Striker. Os atributos são aplicados na simulação compartilhada (cliente e servidor), e o servidor recalcula tudo a partir dos ids das peças.
+- **Correções**: laser não carrega com braço da arma destruído; dano localizado agora existe no treino (perda de membros, aviso de arma desativada); reparo entre ondas e caixas de suprimento restauram membros; resultado online dá vitória a todos da equipe vencedora e reconhece empate.
+- **Espada e martelo sincronizados**: o dano (treino e servidor) e o impacto acontecem no instante em que a animação acerta (`MELEE_CONTACT`), não no clique.
+- **Bots e equipes** (`server/bots.ts`): navegação por grafo de waypoints, flanco, recuo com pouca vida, detecção de travamento (pula e recalcula a rota), mira com reação e erro. Salas públicas completam vagas com bots (FFA 4, duelo 2, 2v2, 5v5, Core 8) com equipes equilibradas; humanos substituem bots.
+- **Core Control**: zona visível no centro (neutro/azul/laranja/disputado), captura em 3 s sem disputa, pontuação contínua do dono, validação de altura (jato ou caixas não pontuam) e objetivo legível no HUD.
+- **Mapas com identidade** (`MAP_COVER` em `src/shared/arena.ts`): Refinaria com coluna central e dutos; Doca Neon com plataforma elevada e paredes de luz; Cânion com blocos de minério em degraus; Frozen mantém as barricadas. A mesma geometria serve para colisão, chão, linha de visão e navegação no cliente e no servidor.
+- Protocolo online **v8**.
+
+### Verificado nesta entrega
+- `npm run build` passou. `npm run smoke`: **63 checks passaram, 0 falhas, sem erros de console** (registro em `artifacts/smoke-latest.log`, capturas em `artifacts/smoke/`), incluindo desktop e 390×844 com toque, oficina, mapas e online com duas abas.
+- Os testes de espada, bot solo e Core Control foram ajustados ao novo comportamento (contato atrasado, preenchimento com vários bots, captura de 3 s) mantendo os mesmos critérios.
+
+### Pendências reais
+- **13 imagens de referência** (cabeças Vanguard/Ronin/Warden/Tempest, troncos Vanguard/Ronin/Warden/Tempest, pernas Spectre/Vanguard/Ronin/Warden/Tempest) não foram geradas: o usuário recusou o gasto de créditos. Prompts prontos em `docs/PENDING_REFERENCE_PROMPTS.json`.
+- **30 GLBs no Triverse** não foram gerados: não há `TRIVERSE_API_KEY` nem acesso à conta neste ambiente. Plano e comandos em `docs/TRIVERSE_30_PARTS_PLAN.json`. O robô em jogo usa as peças procedurais (silhueta + cores + detalhes de cada família).
+- Gráficos: revisados por capturas (sem erros); não houve nova passada de materiais/iluminação além das peças de mapa. FPS em GPU real e jogo pela internet não foram testados.
 
 ## Executar
 
