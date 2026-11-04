@@ -1,10 +1,12 @@
 import {
   Color3,
+  FresnelParameters,
   Material,
   Mesh,
   MeshBuilder,
   Observer,
   PBRMaterial,
+  Quaternion,
   Scene,
   SceneLoader,
   StandardMaterial,
@@ -14,8 +16,12 @@ import {
 import '@babylonjs/loaders/glTF';
 import type { WeaponId } from '../shared/weapons';
 import type { MechPalette } from '../shared/palette';
+import type { HitZone } from '../shared/arena';
+import { DEFAULT_PARTS, normalizeParts, type MechPartConfig, type PartStyle } from '../shared/customization';
+import { armorBox, armorSurface } from './armorGraphics';
 
 export type { MechPalette };
+export type { MechPartConfig, PartStyle };
 export type MechVariant = 'player' | 'sentinel' | 'brute' | 'sniper' | 'boss';
 
 export interface MechMotion {
@@ -38,6 +44,8 @@ export interface MechVisual {
   weapon: WeaponId;
   setPalette(palette: MechPalette): void;
   setWeapon(weapon: WeaponId): void;
+  setParts(parts: MechPartConfig): void;
+  restoreParts(): void;
   animate(dt: number, motion: number | MechMotion): void;
   setShield(active: boolean): void;
   setCharge(charge01: number): void;
@@ -47,6 +55,7 @@ export interface MechVisual {
   punch(): void;
   land(force: number): void;
   breakApart(impulse: Vector3): void;
+  detachPart(zone: HitZone): void;
   loadShowcase(): Promise<boolean>;
   setShowcase(active: boolean): void;
   dispose(): void;
@@ -66,7 +75,7 @@ const VARIANT_COLORS: Record<Exclude<MechVariant, 'player'>, { armor: string; ed
   boss: { armor: '#2A3138', edge: '#FF3A2A', glow: '#FF2A1A', scale: 1.55 },
 };
 
-const WEAPON_GLOW: Record<WeaponId, string> = { mg: '#58DEFF', shotgun: '#FFB45A', laser: '#FF4FD8', missile: '#FF8A2A' };
+const WEAPON_GLOW: Record<WeaponId, string> = { mg: '#58DEFF', shotgun: '#FFB45A', laser: '#FF4FD8', missile: '#FF8A2A', sword: '#46DFFF', hammer: '#FF9B36' };
 
 let mechCounter = 0;
 
@@ -96,12 +105,15 @@ export function createMech(scene: Scene, palette: MechPalette, variant: MechVari
   const allMaterials = [armor, armorEdge, chassis, dark, joint, glow, whiteGlow, gunMetal, weaponGlow, flame];
 
   function cube(name: string, parent: TransformNode, size: [number, number, number], pos: [number, number, number], mat: StandardMaterial, rotation: [number, number, number] = [0, 0, 0]): Mesh {
-    const mesh = MeshBuilder.CreateBox(`${id}-${name}`, { width: size[0], height: size[1], depth: size[2] }, scene);
+    const mesh = mat.disableLighting || Math.min(...size) < 0.025
+      ? MeshBuilder.CreateBox(`${id}-${name}`, { width: size[0], height: size[1], depth: size[2] }, scene)
+      : armorBox(`${id}-${name}`, size, scene);
     mesh.parent = parent;
     mesh.position.set(...pos);
     mesh.rotation.set(...rotation);
     mesh.material = mat;
     mesh.isPickable = false;
+    mesh.receiveShadows = true;
     return mesh;
   }
 
@@ -112,6 +124,7 @@ export function createMech(scene: Scene, palette: MechPalette, variant: MechVari
     mesh.rotation.set(...rotation);
     mesh.material = mat;
     mesh.isPickable = false;
+    mesh.receiveShadows = true;
     return mesh;
   }
 
@@ -249,7 +262,7 @@ export function createMech(scene: Scene, palette: MechPalette, variant: MechVari
     }
   }
 
-  // Four interchangeable weapon models mounted on the right forearm.
+  // Interchangeable ranged and melee weapons mounted on the right forearm.
   const muzzle = new TransformNode(`${id}-muzzle`, scene);
   const guns = {} as Record<WeaponId, { node: TransformNode; muzzle: [number, number, number] }>;
   const coils: Mesh[] = [];
@@ -307,8 +320,79 @@ export function createMech(scene: Scene, palette: MechPalette, variant: MechVari
     }
     cube('ms-side-light', ms, [.03, .1, .4], [.33, .1, .35], armorEdge);
     guns.missile = { node: ms, muzzle: [0, .06, .9] };
+
+    const sword = new TransformNode(`${id}-energy-sword`, scene);
+    sword.parent = gunMount!;
+    cube('sword-grip', sword, [.2, .22, .63], [0, -.02, .23], gunMetal);
+    cube('sword-guard', sword, [.55, .12, .18], [0, 0, .59], armorEdge);
+    cube('sword-blade-core', sword, [.10, .08, 1.55], [0, .02, 1.43], whiteGlow);
+    cube('sword-blade-glow', sword, [.22, .14, 1.52], [0, .02, 1.43], weaponGlow);
+    guns.sword = { node: sword, muzzle: [0, .02, 2.22] };
+
+    const hammer = new TransformNode(`${id}-mechanical-hammer`, scene);
+    hammer.parent = gunMount!;
+    cube('hammer-grip', hammer, [.22, .24, 1.43], [0, 0, .67], gunMetal);
+    cube('hammer-head', hammer, [.95, .45, .52], [0, 0, 1.45], armor);
+    cube('hammer-impact-face', hammer, [1.02, .48, .10], [0, 0, 1.77], dark);
+    cube('hammer-energy', hammer, [.65, .055, .56], [0, .25, 1.45], weaponGlow);
+    guns.hammer = { node: hammer, muzzle: [0, 0, 1.7] };
   }
   muzzle.parent = gunMount!;
+
+  // Cosmetic part kits share the articulated rig and fixed combat silhouette.
+  const partKits: Record<keyof MechPartConfig, Record<PartStyle, TransformNode[]>> = {
+    head: { scout: [], striker: [], titan: [] },
+    torso: { scout: [], striker: [], titan: [] },
+    legs: { scout: [], striker: [], titan: [] },
+  };
+  function kit(part: keyof MechPartConfig, style: PartStyle, parent: TransformNode): TransformNode {
+    const node = new TransformNode(`${id}-${part}-${style}-kit`, scene);
+    node.parent = parent;
+    partKits[part][style].push(node);
+    return node;
+  }
+  const scoutHead = kit('head', 'scout', neck);
+  for (const side of [-1, 1]) {
+    cube(`scout-helmet-fin-${side}`, scoutHead, [.09, .28, .58], [side * .38, .61, -.13], armorEdge, [-.35, 0, side * -.32]);
+    cyl(`scout-antenna-${side}`, scoutHead, .025, .45, [side * .27, .91, -.16], dark);
+    cyl(`scout-antenna-tip-${side}`, scoutHead, .065, .07, [side * .27, 1.15, -.16], glow);
+  }
+  const titanHead = kit('head', 'titan', neck);
+  cube('titan-helmet-brow', titanHead, [.83, .16, .26], [0, .66, .16], armor);
+  cube('titan-helmet-jaw', titanHead, [.69, .18, .17], [0, .12, .3], armorEdge);
+  for (const side of [-1, 1]) cube(`titan-helmet-ear-${side}`, titanHead, [.20, .42, .45], [side * .44, .38, -.02], armor);
+  const scoutTorso = kit('torso', 'scout', body);
+  for (const side of [-1, 1]) {
+    cube(`scout-chest-fin-${side}`, scoutTorso, [.13, .67, .14], [side * .69, 1.12, -.29], armorEdge, [0, 0, side * -.32]);
+    cube(`scout-reactor-slat-${side}`, scoutTorso, [.06, .32, .07], [side * .43, 1.0, .55], glow, [0, 0, side * -.25]);
+  }
+  const titanTorso = kit('torso', 'titan', body);
+  for (const side of [-1, 1]) {
+    cube(`titan-chest-plate-${side}`, titanTorso, [.52, .66, .19], [side * .4, 1.01, .55], armor, [0, 0, side * .10]);
+    cube(`titan-chest-guard-${side}`, titanTorso, [.23, .64, .63], [side * .73, .91, .0], armorEdge);
+    cube(`titan-reactor-vent-${side}`, titanTorso, [.23, .055, .04], [side * .4, .97, .66], dark);
+  }
+  cube('titan-back-armor', titanTorso, [1.08, .76, .3], [0, 1.0, -.58], armor);
+  for (const [i, side] of [-1, 1].entries()) {
+    const scoutLeg = kit('legs', 'scout', kneePivots[i]);
+    cube(`scout-calf-fin-${side}`, scoutLeg, [.10, .61, .22], [side * .27, -.34, -.13], armorEdge, [.12, 0, side * -.2]);
+    const titanLeg = kit('legs', 'titan', kneePivots[i]);
+    cube(`titan-shin-guard-${side}`, titanLeg, [.57, .62, .21], [0, -.31, .35], armor);
+    cube(`titan-knee-guard-${side}`, titanLeg, [.62, .29, .17], [0, .04, .3], armorEdge);
+    cube(`titan-calf-pack-${side}`, titanLeg, [.45, .54, .23], [0, -.32, -.29], dark);
+  }
+  let partConfig: MechPartConfig = { ...DEFAULT_PARTS };
+  function setParts(next: MechPartConfig): void {
+    partConfig = normalizeParts(next);
+    for (const part of ['head', 'torso', 'legs'] as const) {
+      for (const style of ['scout', 'striker', 'titan'] as const) for (const node of partKits[part][style]) node.setEnabled(style === partConfig[part]);
+    }
+    neck.scaling.setAll(partConfig.head === 'scout' ? .91 : partConfig.head === 'titan' ? 1.08 : 1);
+    const legWidth = partConfig.legs === 'scout' ? .88 : partConfig.legs === 'titan' ? 1.10 : 1;
+    for (const hip of legPivots) hip.scaling.set(legWidth, 1, legWidth);
+    root.metadata = { ...(root.metadata ?? {}), parts: { ...partConfig } };
+    if (showcaseRoot) setShowcase(showcaseRequested);
+  }
 
   // Energy shield shell.
   const shieldMat = material('shield', enemy ? '#FF6546' : '#53DCFF', scene, id, true);
@@ -353,10 +437,11 @@ export function createMech(scene: Scene, palette: MechPalette, variant: MechVari
   function setShowcase(active: boolean) {
     showcaseRequested = active;
     if (!showcaseRoot) return;
-    rig.setEnabled(!active);
-    showcaseRoot.setEnabled(active);
-    shield.setEnabled(!active && shieldActive);
-    shieldRing.setEnabled(!active && shieldActive);
+    const showImported = active && Object.values(partConfig).every((style) => style === 'striker');
+    rig.setEnabled(!showImported);
+    showcaseRoot.setEnabled(showImported);
+    shield.setEnabled(!showImported && shieldActive);
+    shieldRing.setEnabled(!showImported && shieldActive);
   }
 
   function loadShowcase(): Promise<boolean> {
@@ -400,6 +485,8 @@ export function createMech(scene: Scene, palette: MechPalette, variant: MechVari
   let hitTime = 0;
   let recoil = 0;
   let punchTime = 0;
+  let punchDuration = .38;
+  let swingSide = 1;
   let landTime = 0;
   let landForce = 0;
   let air = 0;
@@ -414,15 +501,15 @@ export function createMech(scene: Scene, palette: MechPalette, variant: MechVari
 
   const visual: MechVisual = {
     root, muzzle, weapon,
-    setPalette, setWeapon, animate, setShield, setCharge, setAlert, flashHit, kick, punch, land,
-    breakApart, loadShowcase, setShowcase, dispose,
+    setPalette, setWeapon, setParts, restoreParts, animate, setShield, setCharge, setAlert, flashHit, kick, punch, land,
+    breakApart, detachPart, loadShowcase, setShowcase, dispose,
   };
 
   function setPalette(next: MechPalette) {
     if (enemy) return;
     palette = next;
     armor.diffuseColor = Color3.FromHexString(PALETTES[next]);
-    armor.specularColor = armor.diffuseColor.scale(.55);
+    armor.specularColor = Color3.Lerp(armor.diffuseColor, Color3.White(), .38).scale(.65);
     recolorShowcase(next);
   }
 
@@ -437,15 +524,18 @@ export function createMech(scene: Scene, palette: MechPalette, variant: MechVari
     charge = 0;
   }
   setWeapon(weapon);
+  setParts(DEFAULT_PARTS);
 
   const lerp = (a: number, b: number, t: number) => a + (b - a) * Math.min(1, t);
+  const smooth = (value: number) => { const t = Math.max(0, Math.min(1, value)); return t * t * (3 - 2 * t); };
 
   function animate(dt: number, motionInput: number | MechMotion) {
     const motion: MechMotion = typeof motionInput === 'number' ? { forward: motionInput, lateral: 0 } : motionInput;
     time += dt;
     const speed = Math.hypot(motion.forward, motion.lateral);
     const gait = Math.min(1.35, speed / 6);
-    phase += dt * (2.4 + gait * 7.2);
+    // Phase follows distance, so a stationary mech does not march in place.
+    phase += dt * (0.4 + gait * 8.4);
     const stride = Math.sin(phase) * Math.min(1, gait);
     const fwd = speed > 0.1 ? motion.forward / speed : 1;
     const lat = speed > 0.1 ? motion.lateral / speed : 0;
@@ -455,6 +545,7 @@ export function createMech(scene: Scene, palette: MechPalette, variant: MechVari
     const fwdWeight = Math.abs(fwd) * ground;
     const latWeight = Math.abs(lat) * ground;
     for (const [i, hip] of legPivots.entries()) {
+      if (detached.has(i === 0 ? 'leftLeg' : 'rightLeg')) continue;
       const s = i === 0 ? stride : -stride;
       hip.rotation.x = s * .5 * fwdWeight * strideSign + air * (i === 0 ? -.55 : -.2);
       hip.rotation.z = s * .22 * latWeight * Math.sign(lat || 1);
@@ -470,21 +561,24 @@ export function createMech(scene: Scene, palette: MechPalette, variant: MechVari
     recoil = Math.max(0, recoil - dt * 6);
     punchTime = Math.max(0, punchTime - dt);
     landTime = Math.max(0, landTime - dt * 4);
-    const bob = Math.abs(Math.sin(phase)) * Math.min(1, gait) * .04 * ground;
-    const breathe = Math.sin(time * 2) * .012 * (1 - Math.min(1, gait));
+    const bob = Math.abs(Math.sin(phase)) * Math.min(1, gait) * (motion.sprint ? .07 : .045) * ground;
+    const breathe = Math.sin(time * 1.8) * .018 * (1 - Math.min(1, gait));
     body.position.y = 1.70 + bob + breathe - landTime * landForce * .22;
     rig.position.y = -landTime * landForce * .12;
     body.rotation.x = (motion.sprint ? .14 : .05) * fwd * Math.min(1, gait) - recoil * .12 + (motion.dash ? .2 : 0);
-    body.rotation.z = -lat * .1 * Math.min(1, gait) + Math.sin(phase) * Math.min(1, gait) * .02;
+    body.rotation.z = -lat * .13 * Math.min(1, gait) + Math.sin(phase) * Math.min(1, gait) * .028;
     body.rotation.y = lerp(body.rotation.y, lat * .18 * Math.min(1, gait), dt * 6);
     body.position.z = -recoil * .1;
     const aim = motion.aim ?? 0.05;
-    neck.rotation.x = aim * .45;
+    const detachedLeftRotation = detached.has('leftArm') ? armPivots[0].rotation.clone() : null;
+    const detachedRightRotation = detached.has('rightArm') ? armPivots[1].rotation.clone() : null;
+    if (!detached.has('head')) { neck.rotation.x = aim * .45 - body.rotation.x * .25; neck.rotation.y = -body.rotation.y * .35 + Math.sin(time * .7) * .025 * (1 - Math.min(1, gait)); }
     // Right arm aims the weapon, left arm swings or throws the punch.
     armPivots[1].rotation.x = aim * .9 - .06 - recoil * .45;
+    armPivots[1].rotation.y = 0;
     elbowPivots[1].rotation.x = -.2 - recoil * .3;
     if (punchTime > 0) {
-      const t = 1 - punchTime / .38;
+      const t = 1 - punchTime / punchDuration;
       const extend = t < .35 ? t / .35 : 1 - (t - .35) / .65;
       armPivots[0].rotation.x = -1.45 * extend;
       elbowPivots[0].rotation.x = -.15 * extend;
@@ -495,6 +589,34 @@ export function createMech(scene: Scene, palette: MechPalette, variant: MechVari
     }
     armPivots[0].rotation.z = air * -.25;
     armPivots[1].rotation.z = air * .15;
+
+    if (punchTime > 0 && visual.weapon === 'sword' && !detached.has('rightArm')) {
+      const t = 1 - punchTime / punchDuration;
+      const wind = smooth(t / .22), strike = smooth((t - .22) / .30), recover = 1 - smooth((t - .64) / .36);
+      const sweep = (-1.05 * wind + 2.1 * strike) * recover * swingSide;
+      armPivots[1].rotation.x = -.78 * wind * recover;
+      armPivots[1].rotation.y = sweep;
+      armPivots[1].rotation.z = -.38 * wind * recover;
+      elbowPivots[1].rotation.x = -.45 * (1 - strike) * recover;
+      body.rotation.y += sweep * .37;
+      body.rotation.x += .08 * strike * recover;
+      armPivots[0].rotation.x = -.42 * wind * recover;
+      armPivots[0].rotation.z = -.35 * recover;
+    } else if (punchTime > 0 && visual.weapon === 'hammer' && !detached.has('rightArm')) {
+      const t = 1 - punchTime / punchDuration;
+      const wind = smooth(t / .36), strike = smooth((t - .36) / .23), recover = 1 - smooth((t - .64) / .36);
+      armPivots[1].rotation.x = (-2.15 * wind + 2.75 * strike) * recover;
+      armPivots[1].rotation.y = -.2 * wind * recover;
+      elbowPivots[1].rotation.x = -.6 * (1 - strike) * recover;
+      armPivots[0].rotation.x = -1.1 * wind * recover;
+      body.rotation.x += (-.13 * wind + .48 * strike) * recover;
+      body.position.y -= .14 * strike * recover;
+      rig.position.y -= .1 * strike * recover;
+    }
+
+    // Detached limbs keep their debris trajectory instead of being reanimated.
+    if (detachedLeftRotation) armPivots[0].rotation.copyFrom(detachedLeftRotation);
+    if (detachedRightRotation) armPivots[1].rotation.copyFrom(detachedRightRotation);
 
     // Rotating machine-gun barrels and weapon glow.
     const mgSpin = (guns.mg.node as TransformNode & { spin?: TransformNode }).spin;
@@ -539,12 +661,61 @@ export function createMech(scene: Scene, palette: MechPalette, variant: MechVari
   function setAlert(level: number) { alert = Math.max(0, Math.min(1, level)); }
   function flashHit() { hitTime = .18; }
   function kick(amount: number) { recoil = Math.min(1, recoil + amount); }
-  function punch() { punchTime = .38; }
+  function punch() {
+    swingSide *= -1;
+    punchDuration = visual.weapon === 'hammer' ? .78 : visual.weapon === 'sword' ? .42 : .38;
+    punchTime = punchDuration;
+  }
   function land(force: number) { landTime = 1; landForce = Math.min(1, force / 14); }
 
   // Death: the chassis comes apart into its real 3D parts.
   let breakObserver: Observer<Scene> | null = null;
   const pieces: Array<{ mesh: Mesh; vel: Vector3; spin: Vector3 }> = [];
+  const detached = new Set<HitZone>();
+  const detachedNodes: TransformNode[] = [];
+  const detachedOrigins = new Map<TransformNode, { parent: TransformNode; position: Vector3; rotation: Vector3; quaternion: Quaternion | null; scaling: Vector3 }>();
+  const detachObservers = new Map<TransformNode, Observer<Scene>>();
+  function restoreParts() {
+    for (const [node, origin] of detachedOrigins) {
+      const observer = detachObservers.get(node);
+      if (observer) scene.onBeforeRenderObservable.remove(observer);
+      node.setParent(origin.parent);
+      node.position.copyFrom(origin.position);
+      node.rotation.copyFrom(origin.rotation);
+      node.rotationQuaternion = origin.quaternion?.clone() ?? null;
+      node.scaling.copyFrom(origin.scaling);
+      node.setEnabled(true);
+    }
+    detachedOrigins.clear();
+    detachObservers.clear();
+    detachedNodes.length = 0;
+    detached.clear();
+    setParts(partConfig);
+  }
+  function detachPart(zone: HitZone) {
+    if (detached.has(zone) || zone === 'torso') return;
+    detached.add(zone);
+    const node = zone === 'head' ? neck : zone === 'leftArm' ? armPivots[0] : zone === 'rightArm' ? armPivots[1] : zone === 'leftLeg' ? legPivots[0] : legPivots[1];
+    detachedOrigins.set(node, { parent: node.parent as TransformNode, position: node.position.clone(), rotation: node.rotation.clone(), quaternion: node.rotationQuaternion?.clone() ?? null, scaling: node.scaling.clone() });
+    node.computeWorldMatrix(true);
+    const position = node.getAbsolutePosition().clone();
+    node.setParent(null);
+    node.position.copyFrom(position);
+    detachedNodes.push(node);
+    let velocity = new Vector3((Math.random() - 0.5) * 5, 5, (Math.random() - 0.5) * 5);
+    let time = 0;
+    const observer = scene.onBeforeRenderObservable.add(() => {
+      const dt = Math.min(0.05, scene.getEngine().getDeltaTime() / 1000);
+      time += dt;
+      velocity.y -= 19 * dt;
+      node.position.addInPlace(velocity.scale(dt));
+      node.rotation.x += dt * 3;
+      node.rotation.z += dt * 2;
+      if (node.position.y < root.position.y + 0.15) { node.position.y = root.position.y + 0.15; velocity = velocity.scale(0.35); velocity.y = Math.abs(velocity.y) * 0.25; }
+      if (time > 2.5 || disposed) { scene.onBeforeRenderObservable.remove(observer); detachObservers.delete(node); }
+    });
+    detachObservers.set(node, observer);
+  }
   function breakApart(impulse: Vector3) {
     if (breakObserver) return;
     setShield(false);
@@ -583,8 +754,11 @@ export function createMech(scene: Scene, palette: MechPalette, variant: MechVari
     if (disposed) return;
     disposed = true;
     if (breakObserver) { scene.onBeforeRenderObservable.remove(breakObserver); breakObserver = null; }
+    for (const observer of detachObservers.values()) scene.onBeforeRenderObservable.remove(observer);
+    detachObservers.clear();
     for (const p of pieces) p.mesh.dispose();
     pieces.length = 0;
+    for (const node of detachedNodes) node.dispose(false, true);
     root.dispose(false);
     for (const mat of allMaterials) mat.dispose();
     for (const mat of showcaseAllMaterials) mat.dispose();
@@ -599,8 +773,23 @@ function material(name: string, hex: string, scene: Scene, id: number, emissive 
   const color = Color3.FromHexString(hex);
   result.diffuseColor = color;
   result.specularColor = emissive ? color : color.scale(.55);
-  result.specularPower = emissive ? 16 : 80;
+  result.specularPower = emissive ? 16 : name === 'joint-metal' || name === 'gunmetal' ? 112 : 76;
   result.emissiveColor = emissive ? color.scale(.8) : Color3.Black();
-  result.ambientColor = color.scale(.15);
+  result.ambientColor = color.scale(.08);
+  if (!emissive) {
+    const surface = armorSurface(scene);
+    result.diffuseTexture = surface.paint;
+    result.bumpTexture = surface.normal;
+    result.roughness = name === 'joint-metal' ? 0.24 : name === 'armor' ? 0.46 : 0.58;
+    result.specularColor = Color3.Lerp(color, Color3.White(), name === 'armor' ? .38 : .58).scale(.65);
+    if (scene.environmentTexture) {
+      result.reflectionTexture = scene.environmentTexture;
+      result.reflectionFresnelParameters = new FresnelParameters();
+      result.reflectionFresnelParameters.leftColor = new Color3(.32, .35, .38);
+      result.reflectionFresnelParameters.rightColor = new Color3(.035, .04, .05);
+      result.reflectionFresnelParameters.power = 4;
+      result.useReflectionFresnelFromSpecular = true;
+    }
+  }
   return result;
 }

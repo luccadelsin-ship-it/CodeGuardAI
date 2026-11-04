@@ -1,0 +1,74 @@
+{
+  "assetType": "modular-lower-body-reference",
+  "generationMode": "built-in image_gen",
+  "completed": 5,
+  "requested": 10,
+  "stopReason": "User requested immediate ZIP handoff; no more generations after current in-flight jobs.",
+  "entries": [
+    {
+      "id": "scout",
+      "status": "generated",
+      "file": "scout.png",
+      "source": "C:\\Users\\lucca\\.codex\\generated_images\\01a1a8b1-8c04-74b0-8403-a271003dd551\\exec-fcf922a6-f88a-4736-88a1-13d00e1f74f7.png",
+      "prompt": "Use case: stylized-concept. Asset type: individual image-to-3D reference for a modular combat mech game. Render ONE standalone lower-body robot module only: pelvis and hips connected to BOTH complete legs and BOTH feet. A lightweight agile SCOUT lower-body module: slim athletic mechanical legs with swept white and blue armor shells, dark graphite joints, small cyan indicator lights, narrow compact feet. Blue-white palette.\nThe entire subject is the detachable lower half only, ending cleanly at a flat standardized waist connector on top of the pelvis. No torso, chest, abdomen tower, arms, hands, head, shoulder, weapon, cape, human or extra objects. Both full legs and feet must be visible and separate, neutral symmetrical standing pose with feet slightly apart. Front three-quarter view turned only about15 degrees, camera at hip level, clear front silhouette suitable for reconstructing a single 3D lower-body mesh.\nHigh-quality realistic hard-surface sci-fi game asset concept render, physically plausible layered armor, bevels, bolts and crisp mechanical panel lines. Plain uniform light gray studio background, soft neutral lighting and subtle contact shadow. Full module centered and occupying about80 percent of a square frame, generous unclipped margins. No floor pedestal, no scene, no text, no labels, no stats, no watermark."
+    },
+    {
+      "id": "striker",
+      "status": "generated",
+      "file": "striker.png",
+      "source": "C:\\Users\\lucca\\.codex\\generated_images\\01a1a8b1-8c04-74b0-8403-a271003dd551\\exec-94f98a58-1bca-41fd-88ec-4c83728e50e4.png",
+      "prompt": "Use case: stylized-concept. Asset type: individual image-to-3D reference for a modular combat mech game. Render ONE standalone lower-body robot module only: pelvis and hips connected to BOTH complete legs and BOTH feet. A balanced STRIKER lower-body module: versatile medium mechanical legs with angular white armor plates, orange accents, dark graphite joints, broad practical boots, modest exposed actuators. Orange-white palette.\nThe entire subject is the detachable lower half only, ending cleanly at a flat standardized waist connector on top of the pelvis. No torso, chest, abdomen tower, arms, hands, head, shoulder, weapon, cape, human or extra objects. Both full legs and feet must be visible and separate, neutral symmetrical standing pose with feet slightly apart. Front three-quarter view turned only about15 degrees, camera at hip level, clear front silhouette suitable for reconstructing a single 3D lower-body mesh.\nHigh-quality realistic hard-surface sci-fi game asset concept render, physically plausible layered armor, bevels, bolts and crisp mechanical panel lines. Plain uniform light gray studio background, soft neutral lighting and subtle contact shadow. Full module centered and occupying about80 percent of a square frame, generous unclipped margins. No floor pedestal, no scene, no text, no labels, no stats, no watermark."
+    },
+    {
+      "id": "titan",
+      "status": "generated",
+      "file": "titan.png",
+      "source": "C:\\Users\\lucca\\.codex\\generated_images\\01a1a8b1-8c04-74b0-8403-a271003dd551\\exec-c30b84bc-8417-473d-abfd-5cecbf861c58.png",
+      "prompt": "Use case: stylized-concept. Asset type: individual image-to-3D reference for a modular combat mech game. Render ONE standalone lower-body robot module only: pelvis and hips connected to BOTH complete legs and BOTH feet. A TITAN heavy assault lower-body module: very bulky armored thighs and shins, thick yellow and black industrial armor, huge reinforced knee shields, hydraulic pistons, massively broad weight-bearing rectangular boots. A squat sturdy wide stance. Yellow-black palette.\nThe detachable lower half ends cleanly at a flat standardized waist connector on top of the pelvis. Absolutely no torso, chest, head, arms, hands, shoulders, weapon, human or extra objects. Both full legs and feet visible and separated, neutral standing pose with feet apart. Front three-quarter view turned only about15 degrees, camera at hip level, clear front silhouette suitable for reconstructing a single 3D lower-body mesh.\nHigh-quality realistic hard-surface sci-fi game asset concept render, physically plausible layered armor, bevels, bolts and crisp mechanical panel lines. Plain uniform light gray studio background, soft neutral lighting and subtle contact shadow. Full module centered and occupying about80 percent of a square frame, generous unclipped margins. No floor pedestal, no scene, no text, no labels, no stats, no watermark."
+    },
+    {
+      "id": "phantom",
+      "status": "generated",
+      "file": "phantom.png",
+      "source": "C:\\Users\\lucca\\.codex\\generated_images\\01a1a8b1-8c04-74b0-8403-a271003dd551\\exec-4741fe70-1216-4cd6-a565-6883ee0c80b7.png",
+      "prompt": "Use case: stylized-concept. Asset type: individual image-to-3D reference for a modular combat mech game. Render ONE standalone lower-body robot module only: pelvis and hips connected to BOTH complete legs and BOTH feet. A PHANTOM stealth lower-body module: sleek tapered mechanical legs, angular overlapping dark violet and black armor, subtle purple illuminated channels, sharp aerodynamic shin plates and low-profile precise feet. Agile evasive silhouette, not monstrous. Purple-black palette.\nThe detachable lower half ends cleanly at a flat standardized waist connector on top of the pelvis. Absolutely no torso, chest, head, arms, hands, shoulders, weapon, human or extra objects. Both full legs and feet visible and separated, neutral standing pose with feet apart. Front three-quarter view turned only about15 degrees, camera at hip level, clear front silhouette suitable for reconstructing a single 3D lower-body mesh.\nHigh-quality realistic hard-surface sci-fi game asset concept render, physically plausible layered armor, bevels, bolts and crisp mechanical panel lines. Plain uniform light gray studio background, soft neutral lighting and subtle contact shadow. Full module centered and occupying about80 percent of a square frame, generous unclipped margins. No floor pedestal, no scene, no text, no labels, no stats, no watermark."
+    },
+    {
+      "id": "industrial",
+      "status": "generated",
+      "file": "industrial.png",
+      "source": "C:\\Users\\lucca\\.codex\\generated_images\\01a1a8b1-8c04-74b0-8403-a271003dd551\\exec-9cafa4e2-58d8-4784-aea2-88cd17db9525.png",
+      "prompt": "Use case: stylized-concept. Asset type: individual image-to-3D reference for a modular combat mech game. Render ONE standalone lower-body robot module only: pelvis and hips connected to BOTH complete legs and BOTH feet. An INDUSTRIAL utility combat lower-body module: thick orange reinforced work-mech armor, black steel underframe, practical large hydraulic actuators, rugged square knees, heavy grippy box-like industrial boots. Robust functional construction with small amber indicators. Orange and graphite palette.\nThe detachable lower half ends cleanly at a flat standardized waist connector on top of the pelvis. Absolutely no torso, chest, head, arms, hands, shoulders, weapon, human or extra objects. Both full legs and feet visible and separated, neutral standing pose with feet apart. Front three-quarter view turned only about15 degrees, camera at hip level, clear front silhouette suitable for reconstructing a single 3D lower-body mesh.\nHigh-quality realistic hard-surface sci-fi game asset concept render, physically plausible layered armor, bevels, bolts and crisp mechanical panel lines. Plain uniform light gray studio background, soft neutral lighting and subtle contact shadow. Full module centered and occupying about80 percent of a square frame, generous unclipped margins. No floor pedestal, no scene, no text, no labels, no stats, no watermark."
+    },
+    {
+      "id": "spectre",
+      "status": "pending",
+      "file": "spectre.png",
+      "prompt": "Render ONE standalone robot lower-body module only: pelvis/hips connected to BOTH complete mechanical legs and BOTH feet. Advanced white and cyan technological mechanical lower-body module, smooth precision armor, circular cyan energy nodes and integrated stabilization hardware. Flat clean standardized waist connector at top, absolutely no torso/arms/head/weapons. Neutral standing pose with feet slightly apart; mild front three-quarter view; entire silhouette centered at80% frame with unclipped margins. Realistic hard-surface sci-fi game asset concept render on plain uniform light gray background, soft neutral studio light and subtle contact shadow. No text, labels, stats, watermark, scene or pedestal."
+    },
+    {
+      "id": "vanguard",
+      "status": "pending",
+      "file": "vanguard.png",
+      "prompt": "Render ONE standalone robot lower-body module only: pelvis/hips connected to BOTH complete mechanical legs and BOTH feet. Defensive military lower-body module, olive and ivory armor, practical tactical reinforced kneeguards and sturdy medium-heavy boots. Flat clean standardized waist connector at top, absolutely no torso/arms/head/weapons. Neutral standing pose with feet slightly apart; mild front three-quarter view; entire silhouette centered at80% frame with unclipped margins. Realistic hard-surface sci-fi game asset concept render on plain uniform light gray background, soft neutral studio light and subtle contact shadow. No text, labels, stats, watermark, scene or pedestal."
+    },
+    {
+      "id": "ronin",
+      "status": "pending",
+      "file": "ronin.png",
+      "prompt": "Render ONE standalone robot lower-body module only: pelvis/hips connected to BOTH complete mechanical legs and BOTH feet. Agile samurai-inspired mechanical lower-body module, deep red and graphite layered armor plates, clean engineered silhouette, no cloth or swords. Flat clean standardized waist connector at top, absolutely no torso/arms/head/weapons. Neutral standing pose with feet slightly apart; mild front three-quarter view; entire silhouette centered at80% frame with unclipped margins. Realistic hard-surface sci-fi game asset concept render on plain uniform light gray background, soft neutral studio light and subtle contact shadow. No text, labels, stats, watermark, scene or pedestal."
+    },
+    {
+      "id": "warden",
+      "status": "pending",
+      "file": "warden.png",
+      "prompt": "Render ONE standalone robot lower-body module only: pelvis/hips connected to BOTH complete mechanical legs and BOTH feet. Heavy guardian lower-body module, navy and steel broad armor, blocky reinforced shins and wide planted feet. Flat clean standardized waist connector at top, absolutely no torso/arms/head/weapons. Neutral standing pose with feet slightly apart; mild front three-quarter view; entire silhouette centered at80% frame with unclipped margins. Realistic hard-surface sci-fi game asset concept render on plain uniform light gray background, soft neutral studio light and subtle contact shadow. No text, labels, stats, watermark, scene or pedestal."
+    },
+    {
+      "id": "tempest",
+      "status": "pending",
+      "file": "tempest.png",
+      "prompt": "Render ONE standalone robot lower-body module only: pelvis/hips connected to BOTH complete mechanical legs and BOTH feet. Fast high-tech lower-body module, teal and silver armor, streamlined turbine-like details and slim powerful shins. Flat clean standardized waist connector at top, absolutely no torso/arms/head/weapons. Neutral standing pose with feet slightly apart; mild front three-quarter view; entire silhouette centered at80% frame with unclipped margins. Realistic hard-surface sci-fi game asset concept render on plain uniform light gray background, soft neutral studio light and subtle contact shadow. No text, labels, stats, watermark, scene or pedestal."
+    }
+  ]
+}

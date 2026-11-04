@@ -219,10 +219,21 @@ export function raySphere(origin: Vec3, dir: Vec3, maxT: number, center: Vec3, r
 /** Mech hit volume: body capsule plus a head weak point worth extra damage. */
 export const MECH_HITBOX = { y0: 0.45, y1: 2.75, radius: 0.85, headY: 3.18, headRadius: 0.42 } as const;
 
-export function rayMech(origin: Vec3, dir: Vec3, maxT: number, base: Vec3, scale = 1): { t: number; critical: boolean } | null {
+export type HitZone = 'head' | 'torso' | 'leftArm' | 'rightArm' | 'leftLeg' | 'rightLeg';
+
+export function rayMech(origin: Vec3, dir: Vec3, maxT: number, base: Vec3, scale = 1): { t: number; critical: boolean; zone: HitZone } | null {
   const head = raySphere(origin, dir, maxT, { x: base.x, y: base.y + MECH_HITBOX.headY * scale, z: base.z }, MECH_HITBOX.headRadius * scale);
   const body = rayCapsule(origin, dir, maxT, base, MECH_HITBOX.y0 * scale, MECH_HITBOX.y1 * scale, MECH_HITBOX.radius * scale);
-  if (head !== null && (body === null || head <= body + 0.15)) return { t: head, critical: true };
-  if (body !== null) return { t: body, critical: false };
+  const limbs: Array<{ zone: HitZone; t: number }> = [];
+  for (const side of [-1, 1]) {
+    const arm = rayCapsule(origin, dir, maxT, { x: base.x + side * 1.03 * scale, y: base.y, z: base.z }, 1.38 * scale, 2.62 * scale, 0.36 * scale);
+    const leg = rayCapsule(origin, dir, maxT, { x: base.x + side * 0.49 * scale, y: base.y, z: base.z }, 0.12 * scale, 1.4 * scale, 0.37 * scale);
+    if (arm !== null) limbs.push({ zone: side < 0 ? 'leftArm' : 'rightArm', t: arm });
+    if (leg !== null) limbs.push({ zone: side < 0 ? 'leftLeg' : 'rightLeg', t: leg });
+  }
+  limbs.sort((a, b) => a.t - b.t);
+  if (head !== null && (body === null || head <= body + 0.5) && (!limbs.length || head <= limbs[0].t + 0.1)) return { t: head, critical: true, zone: 'head' };
+  if (limbs.length && (body === null || limbs[0].t <= body + 0.45)) return { t: limbs[0].t, critical: false, zone: limbs[0].zone };
+  if (body !== null) return { t: body, critical: false, zone: 'torso' };
   return null;
 }

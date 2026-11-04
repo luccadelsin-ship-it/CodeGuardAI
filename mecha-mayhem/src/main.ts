@@ -7,8 +7,10 @@ import type { MechPalette } from './game/mech';
 import { TouchControls, isTouchDevice } from './game/touch';
 import { THEMES, createWorld, type ThemeId } from './game/world';
 import { OnlineSession, defaultServerUrl, type ScoreRow } from './net/online';
-import type { OnlineMode } from './shared/protocol';
+import { MODE_RULES, type OnlineMode } from './shared/protocol';
 import { WEAPONS, WEAPON_ORDER, isWeaponId, type WeaponId } from './shared/weapons';
+import { PART_STYLES, normalizeParts, type MechPartConfig } from './shared/customization';
+import { MAPS, MAP_ORDER, mapFromSearch, type MapId } from './shared/maps';
 import './style.css';
 
 const el = <T extends HTMLElement = HTMLElement>(id: string): T => {
@@ -22,7 +24,7 @@ const loading = el('loading');
 const progressFill = el('loading-fill');
 const progressLabel = el('loading-label');
 const progressPercent = el('loading-percent');
-const screenIds = ['menu', 'garage', 'online', 'settings', 'credits', 'pause', 'result'] as const;
+const screenIds = ['menu', 'lobby', 'garage', 'online', 'settings', 'credits', 'pause', 'result'] as const;
 type UiScreen = typeof screenIds[number] | 'game';
 let currentScreen: UiScreen = 'menu';
 let game: CombatGame;
@@ -33,6 +35,9 @@ let hitTimer = 0;
 let bannerTimer = 0;
 let rotateTimer = 0;
 let scoreboardHeld = false;
+let garageReturn: 'menu' | 'lobby' = 'menu';
+let partConfig: MechPartConfig = normalizeParts(null);
+const selectedMap = mapFromSearch(location.search);
 
 function progress(percent: number, label: string): void {
   progressFill.style.width = `${percent}%`;
@@ -61,6 +66,63 @@ function saveSetting(key: string, value: string): void {
 
 function loadSetting(key: string, fallback: string): string {
   try { return localStorage.getItem(`mecha-mayhem:${key}`) ?? fallback; } catch { return fallback; }
+}
+
+function changeMap(id: MapId, lobby = false): void {
+  const url = new URL(location.href);
+  if (id === 'frozen') url.searchParams.delete('map'); else url.searchParams.set('map', id);
+  if (lobby) url.searchParams.set('lobby', '1'); else url.searchParams.delete('lobby');
+  location.href = url.href;
+}
+
+function refreshLoadout(): void {
+  const label = (style: string) => PART_STYLES.find((part) => part.id === style)?.name ?? 'Striker';
+  el('lobby-loadout').textContent = `${label(partConfig.head)} / ${label(partConfig.torso)} / ${label(partConfig.legs)}`;
+  el<HTMLSelectElement>('lobby-weapon').value = game.currentWeapon;
+  el<HTMLSelectElement>('lobby-difficulty').value = game.difficulty;
+}
+
+function openLobby(): void {
+  game.setMode('garage');
+  refreshLoadout();
+  show('lobby');
+}
+
+function buildLobby(): void {
+  const maps = el('lobby-maps');
+  maps.replaceChildren();
+  for (const id of MAP_ORDER) {
+    const map = MAPS[id];
+    const card = document.createElement('button');
+    card.className = `map-card${id === selectedMap ? ' selected' : ''}`;
+    card.dataset.map = id;
+    card.style.setProperty('--map-color', map.color);
+    card.setAttribute('aria-pressed', `${id === selectedMap}`);
+    card.innerHTML = `<span class="map-card-art"><i></i><b>${id === selectedMap ? 'SELECIONADO' : 'EXPLORAR'}</b></span><strong>${map.name}</strong><small>${map.detail}</small>`;
+    card.addEventListener('click', () => { if (id !== selectedMap) changeMap(id, true); });
+    maps.append(card);
+  }
+  el('lobby-map-count').textContent = `${MAP_ORDER.length} ARENAS`;
+  const weapons = el<HTMLSelectElement>('lobby-weapon');
+  weapons.replaceChildren(...WEAPON_ORDER.map((id) => new Option(WEAPONS[id].name, id)));
+  weapons.addEventListener('change', () => selectWeapon(weapons.value as WeaponId));
+  refreshLoadout();
+}
+
+function bindPartCustomization(): void {
+  try { partConfig = normalizeParts(JSON.parse(loadSetting('parts', '{}'))); } catch { partConfig = normalizeParts(null); }
+  for (const part of ['head', 'torso', 'legs'] as const) {
+    const select = el<HTMLSelectElement>(`part-${part}`);
+    select.replaceChildren(...PART_STYLES.map((style) => new Option(style.name, style.id)));
+    select.value = partConfig[part];
+    select.addEventListener('change', () => {
+      partConfig = normalizeParts({ ...partConfig, [part]: select.value });
+      game.player.setParts(partConfig);
+      saveSetting('parts', JSON.stringify(partConfig));
+      refreshLoadout();
+    });
+  }
+  game.player.setParts(partConfig);
 }
 
 function toast(message: string): void {
@@ -216,7 +278,7 @@ function updateHud(state: HudState): void {
   combo.classList.toggle('hidden', state.combo <= 1);
   combo.textContent = `COMBO ×${state.combo}`;
   el('objective').textContent = state.objective;
-  el('hud-mission').textContent = state.session === 'online' ? `ONLINE · ${online?.room ?? ''} · ${online?.ping ?? 0} MS` : `MISSÃO 01 / ${DIFFICULTIES[game.difficulty].label}`;
+  el('hud-mission').textContent = state.session === 'online' ? `ONLINE · ${online?.room ?? ''} · ${online?.ping ?? 0} MS${online && !['ffa', 'duel'].includes(online.mode) ? ` · 🔵 ${Math.floor(online.teamScores[0])} × ${Math.floor(online.teamScores[1])} 🟠${online.mode === 'core' ? ` · CORE ${online.coreOwner?.toUpperCase() ?? 'NEUTRO'}` : ''}` : ''}` : `MISSÃO 01 / ${DIFFICULTIES[game.difficulty].label}`;
   for (const [key, cd] of [['dash', state.dashCooldown], ['shield', state.shieldCooldown], ['impact', state.impactCooldown]] as const) {
     el(`${key}-status`).textContent = cd <= 0 ? 'PRONTO' : `${cd.toFixed(1)} S`;
     el(`${key}-ability`).classList.toggle('cooldown', cd > 0);
@@ -241,7 +303,7 @@ function updateHud(state: HudState): void {
 function renderScoreboard(rows: ScoreRow[]): void {
   const board = el('scoreboard');
   board.innerHTML = `<div class="sb-head"><span>PILOTO</span><span>A</span><span>M</span><span>PTS</span><span>MS</span></div>` +
-    rows.map((r) => `<div class="sb-row${r.me ? ' me' : ''}"><span>${escapeHtml(r.name)}</span><span>${r.kills}</span><span>${r.deaths}</span><span>${r.score}</span><span>${r.ping}</span></div>`).join('');
+    rows.map((r) => `<div class="sb-row${r.me ? ' me' : ''}" data-team="${r.team ?? 'none'}"><span>${r.team === 'blue' ? '🔵 ' : r.team === 'orange' ? '🟠 ' : ''}${escapeHtml(r.name)}</span><span>${r.kills}</span><span>${r.deaths}</span><span>${r.score}</span><span>${r.ping}</span></div>`).join('');
   board.classList.toggle('hidden', !(scoreboardHeld || (online && online.phase !== 'playing')));
 }
 
@@ -305,6 +367,7 @@ function buildWeaponUi(): void {
 function selectWeapon(id: WeaponId): void {
   game.setWeapon(id);
   saveSetting('weapon', id);
+  el<HTMLSelectElement>('lobby-weapon').value = id;
   document.querySelectorAll('.weapon-card').forEach((card) => card.classList.toggle('active', (card as HTMLElement).dataset.weapon === id));
   const def = WEAPONS[id];
   const bar = (label: string, value: number) => `<div class="stat"><span>${label}</span><div><i style="width:${value}%"></i></div></div>`;
@@ -336,7 +399,7 @@ async function joinOnline(mode: OnlineMode, room?: string, create?: boolean): Pr
     online?.leave();
     game.sfx.unlock();
     const session = await OnlineSession.connect(game, game.camera.getScene(), {
-      url, name, palette: loadSetting('palette', 'arctic') as MechPalette, weapon: game.currentWeapon, mode, room, create,
+      url, name, palette: loadSetting('palette', 'arctic') as MechPalette, weapon: game.currentWeapon, parts: partConfig, mode, room, create,
     }, {
       onFeed: feed,
       onBanner: banner,
@@ -349,8 +412,9 @@ async function joinOnline(mode: OnlineMode, room?: string, create?: boolean): Pr
     el('online-ping').textContent = `SALA ${session.room}`;
     const spawn = game.world.arena.spawnPoints[0];
     game.startOnline(session, new Vector3(spawn.x, spawn.y, spawn.z), spawn.yaw);
+    if (session.team) game.setPalette(session.team === 'blue' ? 'arctic' : 'ember');
     show('game');
-    banner(session.isPrivate ? `SALA ${session.room}` : 'CONECTADO', session.isPrivate ? 'COMPARTILHE O CÓDIGO COM SEU OPONENTE' : `PARTIDA PÚBLICA · ${mode === 'duel' ? 'DUELO 1V1' : 'MATA-MATA'}`);
+    banner(session.isPrivate ? `SALA ${session.room}` : 'CONECTADO', session.isPrivate ? 'COMPARTILHE O CÓDIGO COM SEU OPONENTE' : `PARTIDA PÚBLICA · ${MODE_RULES[mode].label}`);
   } catch (error) {
     status.textContent = error instanceof Error ? error.message : 'Falha ao conectar.';
     status.classList.add('error');
@@ -363,18 +427,25 @@ function bindUI(): void {
   const startTraining = () => { game.leaveSession(); online = null; show('game'); game.start(); };
   const toMenu = () => { game.leaveSession(); online = null; game.setMode('menu'); show('menu'); };
   el('start-button').addEventListener('click', startTraining);
+  el('lobby-button').addEventListener('click', openLobby);
+  el('lobby-launch').addEventListener('click', startTraining);
+  el('lobby-customize').addEventListener('click', () => { garageReturn = 'lobby'; game.setMode('garage'); show('garage'); });
+  el('lobby-online').addEventListener('click', () => { game.setMode('settings'); show('online'); });
   el('garage-play').addEventListener('click', startTraining);
   el('retry-button').addEventListener('click', () => {
     if (game.session === 'online' && online) { game.resume(); game.mode = 'game'; show('game'); touch.setVisible(document.body.classList.contains('touch-mode')); return; }
     startTraining();
   });
   el('restart-button').addEventListener('click', startTraining);
-  el('garage-button').addEventListener('click', () => { game.setMode('garage'); show('garage'); });
+  el('garage-button').addEventListener('click', () => { garageReturn = 'menu'; game.setMode('garage'); show('garage'); });
   el('online-button').addEventListener('click', () => { game.setMode('settings'); show('online'); });
   el('settings-button').addEventListener('click', () => { game.setMode('settings'); show('settings'); });
   el('credits-button').addEventListener('click', () => { game.setMode('settings'); show('credits'); });
   el('credits-button-mobile').addEventListener('click', () => { game.setMode('settings'); show('credits'); });
-  document.querySelectorAll<HTMLButtonElement>('[data-back]').forEach((button) => button.addEventListener('click', () => { game.setMode('menu'); show('menu'); }));
+  document.querySelectorAll<HTMLButtonElement>('[data-back]').forEach((button) => button.addEventListener('click', () => {
+    if (currentScreen === 'garage' && garageReturn === 'lobby') { openLobby(); return; }
+    game.setMode('menu'); show('menu');
+  }));
   el('resume-button').addEventListener('click', () => { game.resume(); show('game'); });
   for (const id of ['pause-menu-button', 'result-menu-button']) el(id).addEventListener('click', toMenu);
   document.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => game.sfx.ui()));
@@ -404,6 +475,7 @@ function bindUI(): void {
     });
   });
   buildWeaponUi();
+  bindPartCustomization();
   const savedWeapon = loadSetting('weapon', 'mg');
   selectWeapon(isWeaponId(savedWeapon) ? savedWeapon : 'mg');
   game.onWeapon = (id) => {
@@ -417,21 +489,27 @@ function bindUI(): void {
   applyTheme(Math.max(0, THEMES.findIndex((t) => t.id === savedTheme)));
   el('theme-prev').addEventListener('click', () => applyTheme(themeIndex - 1));
   el('theme-next').addEventListener('click', () => applyTheme(themeIndex + 1));
-  const savedDifficulty = loadSetting('difficulty', 'veteran') as Difficulty;
+  const savedDifficulty = loadSetting('difficulty', 'recruit') as Difficulty;
   const setDifficulty = (d: Difficulty) => {
     game.setDifficulty(d);
     saveSetting('difficulty', d);
     document.querySelectorAll<HTMLElement>('[data-difficulty]').forEach((chip) => chip.classList.toggle('active', chip.dataset.difficulty === d));
+    el<HTMLSelectElement>('lobby-difficulty').value = d;
     refreshBest();
   };
-  setDifficulty(savedDifficulty in DIFFICULTIES ? savedDifficulty : 'veteran');
+  setDifficulty(savedDifficulty in DIFFICULTIES ? savedDifficulty : 'recruit');
+  el<HTMLSelectElement>('lobby-difficulty').addEventListener('change', (event) => setDifficulty((event.target as HTMLSelectElement).value as Difficulty));
   document.querySelectorAll<HTMLButtonElement>('[data-difficulty]').forEach((chip) => chip.addEventListener('click', () => setDifficulty(chip.dataset.difficulty as Difficulty)));
+  buildLobby();
 
   // Online lobby.
   el<HTMLInputElement>('pilot-name').value = loadSetting('pilot', '');
   el<HTMLInputElement>('server-url').value = loadSetting('server', '') || defaultServerUrl();
   el('quick-ffa').addEventListener('click', () => void joinOnline('ffa'));
   el('quick-duel').addEventListener('click', () => void joinOnline('duel'));
+  el('quick-team2').addEventListener('click', () => void joinOnline('team2'));
+  el('quick-team5').addEventListener('click', () => void joinOnline('team5'));
+  el('quick-core').addEventListener('click', () => void joinOnline('core'));
   el('create-room').addEventListener('click', () => void joinOnline('ffa', undefined, true));
   el('join-room').addEventListener('click', () => {
     const code = el<HTMLInputElement>('room-code').value.trim().toUpperCase();
@@ -500,7 +578,13 @@ async function bootstrap(): Promise<void> {
     console.error('Havok initialization failed; arena movement remains available through collision guards.', error);
   }
   progress(38, 'Preparando arena 3D');
-  const world = await createWorld(scene, (label) => progress(55, label));
+  const mapId = selectedMap;
+  const world = await createWorld(scene, (label) => progress(55, label), mapId);
+  el('hud-map').textContent = MAPS[mapId].name;
+  const mapChoice = el<HTMLSelectElement>('map-choice');
+  mapChoice.replaceChildren(...MAP_ORDER.map((id) => new Option(MAPS[id].name, id)));
+  mapChoice.value = mapId;
+  mapChoice.addEventListener('change', () => changeMap(mapChoice.value as MapId));
   progress(82, 'Armando Striker e interface de combate');
   game = new CombatGame(scene, engine, canvas, world, loadSetting('palette', 'arctic') as MechPalette);
   touch = new TouchControls(el('app'));
@@ -536,7 +620,10 @@ async function bootstrap(): Promise<void> {
     scene.render();
   });
   progress(100, 'Sistemas operacionais');
-  window.setTimeout(() => { loading.classList.add('hidden'); show('menu'); }, 450);
+  window.setTimeout(() => {
+    loading.classList.add('hidden');
+    if (new URLSearchParams(location.search).get('lobby') === '1') openLobby(); else show('menu');
+  }, 450);
 }
 
 bootstrap().catch((error) => {

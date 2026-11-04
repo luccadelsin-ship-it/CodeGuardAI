@@ -7,6 +7,11 @@
 import { chromium } from 'playwright';
 import { mkdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
+import { Room } from '../server/room.ts';
+import { createArena, rayMech } from '../src/shared/arena.ts';
+import { createMechState, applyPartDamage, damageTaken, stepMech, stepTrigger } from '../src/shared/sim.ts';
+import { meleeInArc } from '../src/shared/weapons.ts';
 
 const out = 'artifacts/smoke';
 await mkdir(out, { recursive: true });
@@ -36,6 +41,59 @@ function check(name, ok, detail = '') {
   checks.push({ name, ok: !!ok, detail });
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? `  — ${detail}` : ''}`);
 }
+const frozenLayout = JSON.parse(readFileSync('public/assets/models/frozen_outpost.layout.json', 'utf8'));
+const refineryLayout = JSON.parse(readFileSync('public/assets/models/refinery.layout.json', 'utf8'));
+const arena = createArena(frozenLayout);
+check('espada: arco rejeita alvo atrás e aceita alvo próximo', meleeInArc(0, { x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 3 }, 4, 0.9) && !meleeInArc(0, { x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: -3 }, 4, 0.9));
+const swordState = createMechState(0, arena.deckY, 0, 0, 'sword');
+const swordFire = stepTrigger(swordState, true, 1 / 30);
+check('espada: golpe gasta energia e abre defesa', swordFire?.weapon === 'sword' && swordState.energy < 100 && swordState.parryTime > 0);
+check('espada: defesa bloqueia projétil durante golpe', damageTaken(swordState, 40, true) === 0);
+const legState = createMechState(0, arena.deckY, 0, 0);
+const detachedLeg = applyPartDamage(legState, 'leftLeg', 70);
+const intactState = createMechState(0, arena.deckY, 0, 0);
+const move = { mx: 0, mz: 1, yaw: 0, pitch: 0, sprint: false, jump: false, dash: false, shield: false };
+for (let i = 0; i < 30; i++) { stepMech(legState, move, 1 / 30, arena); stepMech(intactState, move, 1 / 30, arena); }
+check('dano localizado: perna quebrada reduz deslocamento', detachedLeg && legState.z < intactState.z - 0.5);
+const armState = createMechState(0, arena.deckY, 0, 0);
+applyPartDamage(armState, 'rightArm', 60);
+check('dano localizado: braço da arma quebrado impede tiro', stepTrigger(armState, true, 1 / 30) === null);
+check('dano localizado: raio distingue cabeça e perna', rayMech({ x: 0, y: 3.2, z: -5 }, { x: 0, y: 0, z: 1 }, 10, { x: 0, y: 0, z: 0 })?.zone === 'head' && rayMech({ x: 0.5, y: 0.6, z: -5 }, { x: 0, y: 0, z: 1 }, 10, { x: 0, y: 0, z: 0 })?.zone === 'rightLeg');
+const noop = { send() {}, close() {} };
+const meleeRoom = new Room('MELE', 'duel', true, frozenLayout);
+const striker = meleeRoom.join(noop, 'S', 'arctic', 'sword');
+const target = meleeRoom.join(noop, 'T', 'ember', 'mg');
+meleeRoom.phase = 'playing';
+striker.state.x = 0; striker.state.z = 0; striker.state.y = arena.deckY; striker.state.yaw = 0; striker.state.fireCd = 0;
+target.state.x = 0; target.state.z = 3; target.state.y = arena.deckY; target.state.invulnerable = 0;
+const swing = { t: 'fire', weapon: 'sword', o: [999, 999, 999], d: [0, 0, -1], charge: 1, seed: 0, rt: 0 };
+meleeRoom.fire(striker, swing);
+const firstHit = target.state.health;
+meleeRoom.fire(striker, swing);
+check('online: espada valida alcance, energia e cadência no servidor', firstHit < 100 && firstHit === target.state.health && striker.state.energy < 100);
+striker.state.fireCd = 0; target.state.z = 12;
+meleeRoom.fire(striker, swing);
+check('online: espada não atinge alvo fora do alcance', target.state.health === firstHit);
+const solo = new Room('TEST', 'ffa', false, frozenLayout);
+solo.join(noop, 'HUMANO', 'arctic', 'mg');
+for (let i = 0; i < 82; i++) solo.tick(1 / 30);
+check('online: sala pública solo recebe bot do servidor', solo.players.size === 2 && [...solo.players.values()].some((p) => p.bot));
+const teams = new Room('TEAM', 'team2', true, frozenLayout);
+const first = teams.join(noop, 'A', 'arctic', 'mg');
+const second = teams.join(noop, 'B', 'ember', 'mg');
+const third = teams.join(noop, 'C', 'arctic', 'mg');
+const friendlyHp = third.state.health;
+teams.damage(third, first, 50, false, { x: 0, y: 1, z: 0 }, 'mg');
+check('times: equilíbrio e sem fogo amigo', first.team === third.team && first.team !== second.team && third.state.health === friendlyHp);
+const core = new Room('CORE', 'core', true, frozenLayout);
+const capturer = core.join(noop, 'A', 'arctic', 'mg');
+core.join(noop, 'B', 'ember', 'mg');
+core.phase = 'playing'; core.timer = 100;
+capturer.state.x = 0; capturer.state.z = 0;
+core.tick(1 / 30);
+check('Core Control: servidor atribui pontos ao time no centro', core.coreOwner === capturer.team && core.teamScores[capturer.team === 'blue' ? 0 : 1] > 0);
+const refinery = createArena(refineryLayout);
+check('segundo mapa: layout de refinaria tem pontes e coberturas', refinery.layout.visualAsset === 'procedural:refinery' && refinery.layout.bridges.length === 4 && refinery.staticCover.length > 8);
 function watch(page, label) {
   page.on('pageerror', (error) => errors.push(`${label} PAGE: ${error.message}`));
   page.on('console', (message) => { if (message.type() === 'error') errors.push(`${label} CONSOLE: ${message.text()}`); });
@@ -54,6 +112,21 @@ try {
   await page.locator('#menu').waitFor({ state: 'visible', timeout: 120000 });
   await game(page, () => window.__mecha.setQuality('low'));
   await page.screenshot({ path: `${out}/menu.png` });
+  check('treino: dificuldade inicial Recruta', await game(page, () => window.__mecha.difficulty) === 'recruit');
+  await page.locator('#lobby-button').click();
+  await page.locator('#lobby').waitFor({ state: 'visible' });
+  check('lobby: quatro arenas e preparação da missão', await page.locator('#lobby-maps .map-card').count() === 4 && await page.locator('#lobby-launch').isVisible());
+  await page.screenshot({ path: `${out}/lobby.png` });
+  await page.locator('#lobby-customize').click();
+  await page.locator('#part-head').selectOption('scout');
+  await page.locator('#part-torso').selectOption('titan');
+  await page.locator('#part-legs').selectOption('titan');
+  const customized = await page.evaluate(() => ({ parts: window.__mecha.player.root.metadata.parts, saved: JSON.parse(localStorage.getItem('mecha-mayhem:parts')) }));
+  check('oficina: peças aplicadas e salvas', customized.parts.head === 'scout' && customized.parts.torso === 'titan' && customized.parts.legs === 'titan' && customized.saved.torso === 'titan');
+  await page.screenshot({ path: `${out}/customization.png` });
+  await page.locator('#garage [data-back]').click();
+  check('oficina: volta para o lobby', await page.locator('#lobby').isVisible());
+  await page.locator('#lobby [data-back]').click();
   await page.locator('#theme-next').click();
   check('menu: troca de clima', (await page.locator('#theme-name').textContent()) === 'ALVORADA GLACIAL');
   await page.locator('#theme-prev').click();
@@ -102,7 +175,7 @@ try {
     await page.keyboard.press(key);
     const label = await page.locator('#weapon-name').textContent();
     const before = await state(page);
-    await game(page, (close) => { const g = window.__mecha; g.state.health = 100; if (close) g.debugApproach(7); g.debugStep(0.35); }, weapon === 'shotgun');
+    await game(page, (close) => { const g = window.__mecha; g.state.health = 100; if (close) g.debugApproach(7); g.debugStep(0.35); }, weapon === 'shotgun' || weapon === 'missile');
     await page.keyboard.down('KeyJ');
     await game(page, (seconds) => window.__mecha.debugStep(seconds), hold);
     await page.keyboard.up('KeyJ');
@@ -112,6 +185,14 @@ try {
     report.weapons[weapon] = { label, scoreGained: after.score - before.score, heat: Math.round(after.heat), energy: Math.round(after.energy) };
     check(`arma ${weapon}: troca pelo teclado e causa dano`, after.weapon === weapon && after.score > before.score && label.length > 3, `${label} · +${after.score - before.score} pts`);
     if (!after.enemies.length) await game(page, () => window.__mecha.debugStep(8));
+  }
+  for (const [key, weapon] of [['KeyK', 'sword'], ['KeyL', 'hammer']]) {
+    await game(page, () => { const g = window.__mecha; g.debugAutoAim = false; g.state.health = 100; g.state.energy = 100; g.spawnEnemy('sentinel'); g.debugStep(2); g.debugApproach(2.4); });
+    const before = await state(page);
+    await page.keyboard.press(key);
+    await game(page, () => window.__mecha.debugStep(1.3));
+    const after = await state(page);
+    check(`arma ${weapon}: ataque direto pelo teclado`, after.weapon === weapon && after.score > before.score, `+${after.score - before.score} pts`);
   }
   await game(page, () => { window.__mecha.debugAutoAim = false; });
   const afterWeapons = await state(page);
@@ -160,6 +241,11 @@ try {
   await mobile.screenshot({ path: `${out}/mobile-menu.png` });
   const menuFits = await mobile.evaluate(() => [...document.querySelectorAll('#menu button')].filter((b) => b.offsetParent).every((b) => { const r = b.getBoundingClientRect(); return r.right <= innerWidth + 1 && r.bottom <= innerHeight + 1; }));
   check('celular: menu cabe em 390×844', menuFits);
+  await mobile.locator('#lobby-button').tap();
+  const lobbyFits = await mobile.evaluate(() => { const panel = document.querySelector('.lobby-panel'); const r = panel.getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth && panel.scrollWidth <= panel.clientWidth + 1; });
+  check('celular: lobby cabe em 390×844 e permite rolagem', lobbyFits && await mobile.locator('#lobby-maps .map-card').count() === 4);
+  await mobile.screenshot({ path: `${out}/mobile-lobby.png` });
+  await mobile.locator('#lobby [data-back]').tap();
   await mobile.locator('#garage-button').tap();
   await mobile.locator('#garage').waitFor({ state: 'visible' });
   await mobile.waitForTimeout(1500);
@@ -273,6 +359,27 @@ try {
   check('online: dano validado pelo servidor chega ao oponente', killedOrHurt, `vida de BRAVO ${Math.round(bravoHp)} · ALFA ${positions.alfa.join(',')} · BRAVO ${positions.bravo.join(',')}`);
   await alpha.screenshot({ path: `${out}/online-alfa.png` });
   await bravo.screenshot({ path: `${out}/online-bravo.png` });
+  await alpha.close(); await bravo.close();
+  const refineryPage = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+  watch(refineryPage, 'refinery');
+  await refineryPage.goto(`${base}/?map=refinery&debug`, { waitUntil: 'domcontentloaded' });
+  await refineryPage.locator('#menu').waitFor({ state: 'visible', timeout: 120000 });
+  const refineryScene = await game(refineryPage, () => ({ selected: document.querySelector('#map-choice').value, deck: window.__mecha.world.arena.layout.visualAsset, meshes: window.__mecha.scene.meshes.filter((mesh) => mesh.name.startsWith('refinery-')).length }));
+  check('refinaria: mapa 3D procedural carrega', refineryScene.selected === 'refinery' && refineryScene.deck === 'procedural:refinery' && refineryScene.meshes > 10, `${refineryScene.meshes} peças`);
+  await refineryPage.screenshot({ path: `${out}/refinery.png` });
+  for (const id of ['neon', 'canyon']) {
+    await refineryPage.goto(`${base}/?map=${id}&lobby=1&debug`, { waitUntil: 'domcontentloaded' });
+    await refineryPage.locator('#lobby').waitFor({ state: 'visible', timeout: 120000 });
+    const map = await game(refineryPage, (id) => ({ asset: window.__mecha.world.arena.layout.visualAsset, pieces: window.__mecha.scene.meshes.filter((mesh) => mesh.name.startsWith(`${id}-`)).length }), id);
+    check(`mapa ${id}: cenário e lobby carregam`, map.asset === `procedural:${id}` && map.pieces > 20 && await refineryPage.locator(`.map-card[data-map="${id}"]`).getAttribute('aria-pressed') === 'true', `${map.pieces} peças`);
+    await refineryPage.screenshot({ path: `${out}/map-${id}.png` });
+    await refineryPage.locator('#lobby-launch').click();
+    await refineryPage.keyboard.down('KeyW');
+    await game(refineryPage, () => window.__mecha.debugStep(1));
+    await refineryPage.keyboard.up('KeyW');
+    const walkable = await game(refineryPage, () => { const g = window.__mecha; return g.world.arena.onDeck(g.state.x, g.state.z, 0.8) && g.state.health > 0; });
+    check(`mapa ${id}: missão inicia com jogador em plataforma`, walkable);
+  }
 } catch (error) {
   errors.push(`SMOKE: ${error instanceof Error ? error.stack : error}`);
 }

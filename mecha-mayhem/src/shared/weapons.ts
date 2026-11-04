@@ -1,7 +1,7 @@
 /** Weapon tuning shared by training, online prediction and the authoritative server. */
 
-export type WeaponId = 'mg' | 'shotgun' | 'laser' | 'missile';
-export type WeaponKind = 'hitscan' | 'charge' | 'projectile';
+export type WeaponId = 'mg' | 'shotgun' | 'laser' | 'missile' | 'sword' | 'hammer';
+export type WeaponKind = 'hitscan' | 'charge' | 'projectile' | 'melee';
 
 export interface WeaponDef {
   id: WeaponId;
@@ -74,9 +74,38 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
     splashRadius: 4.6, splashDamage: 38, homing: 2.6, pierce: false, knockback: 2.4, recoil: 0.35, shake: 0.25, weight: 0.9,
     color: [1, 0.55, 0.15], stats: { damage: 80, rate: 35, range: 85, control: 90 },
   },
+  sword: {
+    id: 'sword', slot: 5, name: 'ESPADA DE ENERGIA', mark: 'ARC', kind: 'melee',
+    description: 'Golpes em arco, combo de três ataques e uma breve defesa contra projéteis.',
+    damage: 37, minDamage: 37, pellets: 1, spread: 0, bloom: 0, maxBloom: 0, interval: 0.42, range: 4.3,
+    falloffStart: 4.3, falloffMin: 1, heat: 0, energy: 8, chargeTime: 0, minCharge: 0, projectileSpeed: 0,
+    splashRadius: 0, splashDamage: 0, homing: 0, pierce: false, knockback: 2.4, recoil: 0.18, shake: 0.12, weight: 1.06,
+    color: [0.25, 0.85, 1], stats: { damage: 70, rate: 70, range: 8, control: 80 },
+  },
+  hammer: {
+    id: 'hammer', slot: 6, name: 'MARTELO MECÂNICO', mark: 'QUAKE', kind: 'melee',
+    description: 'Golpe pesado em arco com combo de dois ataques e onda de choque no chão.',
+    damage: 70, minDamage: 70, pellets: 1, spread: 0, bloom: 0, maxBloom: 0, interval: 1.05, range: 3.7,
+    falloffStart: 3.7, falloffMin: 1, heat: 0, energy: 18, chargeTime: 0, minCharge: 0, projectileSpeed: 0,
+    splashRadius: 5.5, splashDamage: 26, homing: 0, pierce: false, knockback: 7, recoil: 0.42, shake: 0.36, weight: 0.82,
+    color: [1, 0.54, 0.17], stats: { damage: 100, rate: 25, range: 12, control: 45 },
+  },
 };
 
-export const WEAPON_ORDER: WeaponId[] = ['mg', 'shotgun', 'laser', 'missile'];
+export const WEAPON_ORDER: WeaponId[] = ['mg', 'shotgun', 'laser', 'missile', 'sword', 'hammer'];
+
+/** Server and client use the same sweep geometry, measured from the mech origin. */
+export function meleeInArc(yaw: number, from: { x: number; y: number; z: number }, to: { x: number; y: number; z: number }, reach: number, halfAngle: number): boolean {
+  const dx = to.x - from.x, dz = to.z - from.z;
+  const distance = Math.hypot(dx, dz);
+  if (distance > reach || Math.abs(to.y - from.y) > 2.8) return false;
+  return distance < 0.8 || (dx * Math.sin(yaw) + dz * Math.cos(yaw)) / distance >= Math.cos(halfAngle);
+}
+
+export function meleeDamage(id: WeaponId, combo: number): number {
+  const def = WEAPONS[id];
+  return def.damage * (id === 'sword' ? [1, 1.18, 1.5][combo % 3] : [1, 1.35][combo % 2]);
+}
 
 export function isWeaponId(value: unknown): value is WeaponId {
   return typeof value === 'string' && value in WEAPONS;

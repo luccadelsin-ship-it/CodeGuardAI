@@ -22,6 +22,8 @@ import {
 import '@babylonjs/loaders/glTF';
 import { BUILT_COVER, createArena, type Arena, type ArenaLayout, type Cover } from '../shared/arena';
 import { flareTexture } from './fx';
+import { MAPS, type MapId } from '../shared/maps';
+import { createWorldGraphics } from './worldGraphics';
 
 export type ThemeId = 'day' | 'dusk' | 'storm';
 
@@ -74,6 +76,7 @@ export type World = {
   deckY: number;
   shadows: ShadowGenerator;
   theme: ThemeId;
+  readonly exposure: number;
   barrels: Barrel[];
   canMoveTo(position: Vector3, radius?: number, feetY?: number): boolean;
   raycastCover(origin: Vector3, direction: Vector3, maxDistance: number): number | null;
@@ -129,8 +132,9 @@ function instantiate(container: AssetContainer, name: string): TransformNode {
 }
 
 /** Load the Blender-authored arena and dress it with new cover, props, weather and lighting themes. */
-export async function createWorld(scene: Scene, onProgress?: (label: string) => void): Promise<World> {
+export async function createWorld(scene: Scene, onProgress?: (label: string) => void, mapId: MapId = 'frozen'): Promise<World> {
   const ownedMeshes: AbstractMesh[] = [];
+  const importedNodes: Array<AbstractMesh | TransformNode> = [];
   const physics: PhysicsAggregate[] = [];
   const props: TransformNode[] = [];
 
@@ -139,24 +143,80 @@ export async function createWorld(scene: Scene, onProgress?: (label: string) => 
   const sunlight = new DirectionalLight('arctic sun', new Vector3(-0.6, -1, 0.45), scene);
   sunlight.position = new Vector3(18, 48, -24);
   const shadows = new ShadowGenerator(2048, sunlight);
-  shadows.useBlurExponentialShadowMap = true;
-  shadows.blurKernel = 16;
+  shadows.usePercentageCloserFiltering = true;
+  shadows.filteringQuality = ShadowGenerator.QUALITY_MEDIUM;
   shadows.bias = 0.001;
-  shadows.darkness = 0.25;
+  shadows.normalBias = 0.025;
+  shadows.darkness = 0.18;
 
   onProgress?.('Lendo o layout da arena');
-  const response = await fetch('/assets/models/frozen_outpost.layout.json');
-  if (!response.ok) throw new Error(`Frozen Outpost layout: HTTP ${response.status}`);
+  const response = await fetch(`/assets/models/${MAPS[mapId].layoutFile}`);
+  if (!response.ok) throw new Error(`${MAPS[mapId].name} layout: HTTP ${response.status}`);
   const layout = await response.json() as ArenaLayout;
   const arena = createArena(layout);
   const deckY = layout.deckTopY;
 
-  onProgress?.('Carregando Frozen Outpost em 3D');
-  const arenaImport = await SceneLoader.ImportMeshAsync('', '/assets/models/', 'frozen_outpost.glb', scene);
-  for (const mesh of arenaImport.meshes) {
-    mesh.receiveShadows = true;
-    mesh.isPickable = false;
+  onProgress?.(`Montando ${MAPS[mapId].name} em 3D`);
+  if (mapId === 'frozen') {
+    const arenaImport = await SceneLoader.ImportMeshAsync('', '/assets/models/', 'frozen_outpost.glb', scene);
+    importedNodes.push(...arenaImport.meshes, ...arenaImport.transformNodes);
+    for (const mesh of arenaImport.meshes) { mesh.receiveShadows = true; mesh.isPickable = false; }
+  } else {
+    const steel = material(scene, `${mapId}-steel`, mapId === 'neon' ? '#172b48' : mapId === 'canyon' ? '#ad805b' : '#35414b', false, 0.4);
+    const copper = material(scene, `${mapId}-trim`, mapId === 'neon' ? '#643579' : mapId === 'canyon' ? '#71412b' : '#a8582b', false, 0.5);
+    const emissive = material(scene, `${mapId}-lights`, MAPS[mapId].color, true);
+    const add = (mesh: Mesh, mat: StandardMaterial) => { mesh.material = mat; mesh.isPickable = false; mesh.receiveShadows = true; shadows.addShadowCaster(mesh); ownedMeshes.push(mesh); };
+    for (const [i, platform] of [layout.centralArena, ...layout.stations].entries()) {
+      const deck = MeshBuilder.CreateCylinder(`${mapId}-platform-${i}`, { diameter: platform.radius * 2, height: 0.8, tessellation: 32 }, scene);
+      deck.position.set(platform.x, deckY - 0.4, platform.z); add(deck, steel);
+      const rim = MeshBuilder.CreateTorus(`${mapId}-rim-${i}`, { diameter: platform.radius * 1.9, thickness: 0.13, tessellation: 32 }, scene);
+      rim.position.set(platform.x, deckY + 0.05, platform.z); add(rim, mapId === 'neon' ? emissive : copper);
+    }
+    for (const [i, bridge] of layout.bridges.entries()) {
+      const deck = MeshBuilder.CreateBox(`${mapId}-bridge-${i}`, { width: bridge.widthX, depth: bridge.widthZ, height: 0.65 }, scene);
+      deck.position.set(bridge.x, deckY - 0.33, bridge.z); add(deck, steel);
+      const alongX = bridge.widthX > bridge.widthZ;
+      for (const side of [-1, 1]) {
+        const rail = MeshBuilder.CreateBox(`${mapId}-rail-${i}-${side}`, { width: alongX ? bridge.widthX : 0.15, depth: alongX ? 0.15 : bridge.widthZ, height: 0.12 }, scene);
+        rail.position.set(bridge.x + (alongX ? 0 : side * bridge.widthX * 0.46), deckY + 0.06, bridge.z + (alongX ? side * bridge.widthZ * 0.46 : 0)); add(rail, emissive);
+      }
+    }
+    for (const [i, c] of layout.cover.entries()) {
+      const tower = MeshBuilder.CreateBox(`${mapId}-cover-${i}`, { width: c.widthX, depth: c.widthZ, height: c.height }, scene);
+      tower.position.set(c.x, deckY + c.height * 0.5, c.z); add(tower, copper);
+      const light = MeshBuilder.CreateBox(`${mapId}-cover-light-${i}`, { width: c.widthX + 0.05, depth: c.widthZ + 0.05, height: 0.08 }, scene);
+      light.position.set(c.x, deckY + c.height * 0.8, c.z); add(light, emissive);
+    }
+    // Landmarks stay beyond the walkable decks, so decoration never creates invisible cover.
+    const ground = MeshBuilder.CreateCylinder(`${mapId}-backdrop-ground`, { diameter: 230, height: 1, tessellation: 48 }, scene);
+    ground.position.y = -10; add(ground, steel);
+    const landmarkTemplate = MeshBuilder.CreateBox(`${mapId}-landmark-template`, { size: 1 }, scene);
+    landmarkTemplate.material = copper; landmarkTemplate.setEnabled(false); ownedMeshes.push(landmarkTemplate);
+    for (let i = 0; i < 16; i++) {
+      const angle = i * Math.PI / 8;
+      const distance = 48 + (i % 3) * 7;
+      const landmark = landmarkTemplate.createInstance(`${mapId}-landmark-${i}`);
+      landmark.isPickable = false;
+      const height = mapId === 'neon' ? 12 + (i % 5) * 5 : 8 + (i % 4) * 5;
+      landmark.scaling.set(mapId === 'neon' ? 5 : 9, height, mapId === 'neon' ? 6 : 10);
+      landmark.position.set(Math.sin(angle) * distance, -9 + height / 2, Math.cos(angle) * distance);
+      landmark.rotation.y = angle;
+      ownedMeshes.push(landmark);
+      if (mapId === 'neon' && i % 2 === 0) {
+        const sign = MeshBuilder.CreatePlane(`neon-sign-${i}`, { width: 3.6, height: 1.1 }, scene);
+        sign.position.set(landmark.position.x, landmark.position.y + height * 0.25, landmark.position.z);
+        sign.rotation.y = angle; sign.billboardMode = Mesh.BILLBOARDMODE_Y; add(sign, emissive);
+      }
+    }
+    if (mapId === 'canyon') {
+      for (const side of [-1, 1]) {
+        const pipe = MeshBuilder.CreateCylinder(`canyon-pipe-${side}`, { diameter: 2.3, height: 58, tessellation: 10 }, scene);
+        pipe.position.set(side * 13.5, -3.2, 0); pipe.rotation.x = Math.PI / 2; add(pipe, copper);
+      }
+    }
   }
+
+  const graphics = createWorldGraphics(scene, layout, mapId);
 
   // Invisible Havok proxies, as in the original build.
   const platformThickness = 0.7;
@@ -272,8 +332,23 @@ export async function createWorld(scene: Scene, onProgress?: (label: string) => 
   place(cargo, 'cargo_crate', 28.7, -5.1, deckY, 0.2);
   place(loot, 'loot_crate', -28.8, 5.1, deckY, 0.65);
   place(barrel, 'energy_barrel', 4.9, 27.5, deckY, 0);
-  place(outpost, 'outpost_tower', 31.5, -8.7, -0.13, -0.35);
-  place(radar, 'radar_tower', -31.5, 8.7, -0.13, 0.35);
+  place(outpost, 'outpost_tower', mapId === 'frozen' ? 31.5 : 40, mapId === 'frozen' ? -8.7 : -25, -0.13, -0.35);
+  place(radar, 'radar_tower', mapId === 'frozen' ? -31.5 : -40, mapId === 'frozen' ? 8.7 : 25, -0.13, 0.35);
+  // Reuse the shipped GLBs as distant loading yards and control towers.
+  for (const side of [-1, 1]) {
+    place(cargo, `${mapId}-yard-cargo-${side}`, side * 35, 13, -0.13, side * 0.35);
+    place(cargo, `${mapId}-yard-cargo-stack-${side}`, side * 35, 16.2, -0.13, side * 0.35);
+    place(mapId === 'neon' ? radar : outpost, `${mapId}-yard-tower-${side}`, side * 36, -17, -1.2, side * 0.4);
+    if (mapId !== 'frozen') {
+      for (const [z, top] of [[14.6, -0.13], [-17, -1.2]]) {
+        const island = MeshBuilder.CreateCylinder(`${mapId}-yard-foundation-${side}-${z}`, { diameter: 9, height: top + 10, tessellation: 12 }, scene);
+        island.position.set(side * (z < 0 ? 36 : 35), (top - 10) / 2, z);
+        island.material = plate; island.isPickable = false; island.receiveShadows = true; ownedMeshes.push(island);
+      }
+      const towerIsland = MeshBuilder.CreateCylinder(`${mapId}-tower-foundation-${side}`, { diameter: 11, height: 9.87, tessellation: 12 }, scene);
+      towerIsland.position.set(side * 40, -5.065, -side * 25); towerIsland.material = plate; towerIsland.isPickable = false; towerIsland.receiveShadows = true; ownedMeshes.push(towerIsland);
+    }
+  }
 
   // Explosive barrels (training mode). They are real cover until destroyed.
   const barrels: Barrel[] = BARREL_SPOTS.map(([x, z], id) => {
@@ -368,7 +443,10 @@ export async function createWorld(scene: Scene, onProgress?: (label: string) => 
   function applyTheme(id: ThemeId) {
     theme = id;
     preset = PRESETS[id];
+    if (mapId === 'neon') preset = { ...preset, skyTop: '#0c1230', skyHorizon: '#463564', fog: [0.13, 0.13, 0.25], fogDensity: 0.0058, snow: 0, aurora: 0, hemi: 1.0, hemiGround: [0.17, 0.15, 0.24], sun: 0.95, accent: [0.85, 0.35, 1], exposure: 1.18 };
+    if (mapId === 'canyon') preset = { ...preset, skyTop: id === 'storm' ? '#382628' : '#6b8996', skyHorizon: '#e7b17c', fog: [0.67, 0.5, 0.36], fogDensity: 0.006, snow: 0, aurora: 0, hemiSky: [1, 0.83, 0.65], hemiGround: [0.36, 0.22, 0.12], accent: [1, 0.67, 0.25] };
     const p = preset;
+    graphics.setTheme(p.skyTop, p.skyHorizon, p.accent);
     scene.fogColor = new Color3(...p.fog);
     scene.fogDensity = p.fogDensity;
     scene.clearColor = new Color4(p.fog[0], p.fog[1], p.fog[2], 1);
@@ -405,6 +483,7 @@ export async function createWorld(scene: Scene, onProgress?: (label: string) => 
     deckY,
     shadows,
     get theme() { return theme; },
+    get exposure() { return preset.exposure; },
     set theme(value: ThemeId) { applyTheme(value); },
     barrels,
     canMoveTo(position, radius = 0.65, feetY = deckY) {
@@ -445,6 +524,8 @@ export async function createWorld(scene: Scene, onProgress?: (label: string) => 
     setQuality(next) {
       quality = next;
       shadows.mapSize = next === 'high' ? 2048 : 1024;
+      shadows.filteringQuality = next === 'high' ? ShadowGenerator.QUALITY_MEDIUM : ShadowGenerator.QUALITY_LOW;
+      graphics.setQuality(next);
       applySnow();
     },
     update(dt, time, cameraPosition) {
@@ -457,9 +538,10 @@ export async function createWorld(scene: Scene, onProgress?: (label: string) => 
     },
     dispose() {
       physics.forEach((body) => body.dispose());
+      graphics.dispose();
       ownedMeshes.forEach((mesh) => mesh.dispose());
       props.forEach((prop) => prop.dispose(false, true));
-      [...arenaImport.meshes, ...arenaImport.transformNodes].forEach((node) => node.dispose());
+      importedNodes.forEach((node) => node.dispose());
       shadows.dispose();
       sunlight.dispose();
       hemisphere.dispose();

@@ -76,6 +76,7 @@ export class Fx {
   private fireIndex = 0;
   private smokeIndex = 0;
   private readonly beamTemplates = new Map<string, Mesh>();
+  private readonly shockPool: Array<{ ring: Mesh; mat: StandardMaterial; thickness: number }> = [];
   private readonly debrisTemplate: Mesh;
   private readonly flashLight: PointLight;
   private flashTime = 0;
@@ -274,18 +275,24 @@ export class Fx {
 
   /** Expanding flat ring on the ground or in the air. */
   shockwave(position: Vector3, radius: number, color: Rgb, ttl = 0.4, thickness = 0.12): void {
-    const ring = MeshBuilder.CreateTorus('fx-shock', { diameter: 1, thickness, tessellation: 40 }, this.scene);
+    const reused = this.shockPool.findIndex((item) => item.thickness === thickness);
+    const item = reused >= 0 ? this.shockPool.splice(reused, 1)[0] : (() => {
+      const ring = MeshBuilder.CreateTorus('fx-shock', { diameter: 1, thickness, tessellation: 40 }, this.scene);
+      const mat = new StandardMaterial('fx-shock-mat', this.scene);
+      mat.disableLighting = true;
+      ring.material = mat;
+      return { ring, mat, thickness };
+    })();
+    const { ring, mat } = item;
+    ring.setEnabled(true);
     ring.position.copyFrom(position);
     ring.isPickable = false;
-    const mat = new StandardMaterial('fx-shock-mat', this.scene);
     mat.emissiveColor = new Color3(color[0], color[1], color[2]);
-    mat.disableLighting = true;
     mat.alpha = 0.85;
-    ring.material = mat;
     this.timed.push({
       ttl, life: ttl,
       update: (t) => { const s = 0.4 + (1 - t) * radius * 2; ring.scaling.set(s, 1, s); mat.alpha = t * 0.85; },
-      dispose: () => { ring.dispose(); mat.dispose(); },
+      dispose: () => { ring.setEnabled(false); if (this.shockPool.length < 40) this.shockPool.push(item); else { ring.dispose(); mat.dispose(); } },
     });
   }
 

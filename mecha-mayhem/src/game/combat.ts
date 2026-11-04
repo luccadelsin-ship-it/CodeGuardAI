@@ -15,9 +15,9 @@ import {
   TransformNode,
   Vector3,
 } from '@babylonjs/core';
-import { rayMech, raySphere, type Cover } from '../shared/arena';
+import { rayMech, raySphere, type Cover, type HitZone } from '../shared/arena';
 import { aimOrigin, createMechState, stepMech, stepTrigger, switchWeapon, damageTaken, MOVE, type FireCommand, type MechInput, type MechState } from '../shared/sim';
-import { WEAPONS, WEAPON_ORDER, damageAtDistance, laserDamage, spreadDirections, type WeaponId } from '../shared/weapons';
+import { WEAPONS, WEAPON_ORDER, damageAtDistance, laserDamage, meleeDamage, meleeInArc, spreadDirections, type WeaponId } from '../shared/weapons';
 import { Sfx } from './audio';
 import { DIFFICULTIES, ENEMY_DEFS, Enemy, type AiContext, type Difficulty, type EnemyType, type ProjectileOptions } from './drones';
 import { Fx } from './fx';
@@ -113,7 +113,7 @@ export class CombatGame {
   readonly sfx = new Sfx();
   mode: GameMode = 'menu';
   session: Session = 'training';
-  difficulty: Difficulty = 'veteran';
+  difficulty: Difficulty = 'recruit';
   state: MechState;
   touch?: TouchControls;
   online?: OnlineBridge;
@@ -150,6 +150,8 @@ export class CombatGame {
   private orbitDistance = 8;
   private dragX = 0;
   private mouseFiring = false;
+  /** A tap on a dedicated melee key survives the normal weapon-switch delay. */
+  private keyboardAttack: { weapon: WeaponId; ttl: number } | null = null;
   private sensitivity = 1;
   private time = 0;
   private hudTimer = 0;
@@ -202,23 +204,26 @@ export class CombatGame {
     this.fx = new Fx(scene);
 
     this.glow = new GlowLayer('mm-glow', scene, { mainTextureSamples: 1, blurKernelSize: 32 });
-    this.glow.intensity = 0.65;
+    this.glow.intensity = 0.38;
     this.pipeline = new DefaultRenderingPipeline('mm-pipeline', true, scene, [this.camera]);
-    this.pipeline.samples = 1;
+    this.pipeline.samples = Math.min(4, Math.max(1, engine.getCaps().maxMSAASamples));
     this.pipeline.fxaaEnabled = true;
     this.pipeline.bloomEnabled = true;
-    this.pipeline.bloomThreshold = 0.82;
-    this.pipeline.bloomWeight = 0.28;
-    this.pipeline.bloomKernel = 48;
+    this.pipeline.bloomThreshold = 0.95;
+    this.pipeline.bloomWeight = 0.16;
+    this.pipeline.bloomKernel = 40;
     this.pipeline.bloomScale = 0.5;
+    this.pipeline.sharpenEnabled = true;
+    this.pipeline.sharpen.edgeAmount = 0.12;
+    this.pipeline.sharpen.colorAmount = 1;
     this.pipeline.imageProcessingEnabled = true;
     const ip = this.pipeline.imageProcessing;
     ip.toneMappingEnabled = true;
     ip.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES;
-    ip.exposure = 1.08;
-    ip.contrast = 1.18;
+    ip.exposure = world.exposure;
+    ip.contrast = 1.1;
     ip.vignetteEnabled = true;
-    ip.vignetteWeight = 1.6;
+    ip.vignetteWeight = 1.1;
     ip.vignetteColor.set(0.02, 0.05, 0.09, 1);
     this.pipeline.chromaticAberrationEnabled = true;
     this.pipeline.chromaticAberration.aberrationAmount = 0;
@@ -231,6 +236,7 @@ export class CombatGame {
   setMode(mode: GameMode): void {
     this.mode = mode;
     this.mouseFiring = false;
+    if (mode !== 'game') this.keyboardAttack = null;
     this.touch?.reset();
     this.player.setShowcase(mode === 'menu' || mode === 'settings');
     if (mode !== 'game' && document.pointerLockElement === this.canvas) document.exitPointerLock();
@@ -259,6 +265,7 @@ export class CombatGame {
   setDifficulty(difficulty: Difficulty): void { this.difficulty = difficulty; }
 
   setWeapon(weapon: WeaponId): void {
+    if (this.keyboardAttack?.weapon !== weapon) this.keyboardAttack = null;
     this.weapon = weapon;
     this.player.setWeapon(weapon);
     if (switchWeapon(this.state, weapon) && this.mode === 'game') {
@@ -280,8 +287,12 @@ export class CombatGame {
     this.engine.setHardwareScalingLevel(window.devicePixelRatio / targetPixelRatio);
     this.scene.shadowsEnabled = quality !== 'low';
     this.glow.isEnabled = quality !== 'low';
+    this.glow.intensity = quality === 'high' ? 0.38 : 0.26;
+    this.pipeline.samples = quality === 'high' ? Math.min(4, Math.max(1, this.engine.getCaps().maxMSAASamples)) : 1;
     this.pipeline.bloomEnabled = quality === 'high';
-    this.pipeline.fxaaEnabled = quality !== 'low';
+    this.pipeline.fxaaEnabled = true;
+    this.pipeline.sharpenEnabled = quality !== 'low';
+    this.pipeline.sharpen.edgeAmount = quality === 'high' ? 0.12 : 0.08;
     this.pipeline.chromaticAberrationEnabled = quality === 'high';
     this.fx.setQuality(quality);
     this.world.setQuality(quality);
@@ -333,9 +344,12 @@ export class CombatGame {
   private resetPlayer(at: Vector3, yaw: number): void {
     this.clearCombat();
     this.state = createMechState(at.x, at.y, at.z, yaw, this.weapon);
+    this.keyboardAttack = null;
+    this.lastHurt = this.time;
     this.yaw = yaw;
     this.pitch = 0.12;
     this.playerDown = false;
+    this.player.restoreParts();
     this.player.root.setEnabled(true);
     this.player.setShield(false);
     this.player.setWeapon(this.weapon);
@@ -352,6 +366,7 @@ export class CombatGame {
     this.state.health = MOVE.maxHealth;
     this.yaw = yaw;
     this.playerDown = false;
+    this.player.restoreParts();
     this.player.root.setEnabled(true);
     this.fx.pillar(at, [0.4, 0.9, 1], 1);
   }
@@ -439,6 +454,7 @@ export class CombatGame {
     this.fx.update(dt);
     this.updateCamera(realDt);
     this.world.update(realDt, this.time, this.camera.position);
+    this.pipeline.imageProcessing.exposure = this.world.exposure;
     this.aberration = Math.max(0, this.aberration - realDt * 40);
     if (this.pipeline.chromaticAberrationEnabled) this.pipeline.chromaticAberration.aberrationAmount = this.aberration;
   }
@@ -451,8 +467,14 @@ export class CombatGame {
       if (event.code === 'Escape' && this.mode === 'game') { this.pause(); return; }
       if (event.repeat || this.mode !== 'game') return;
       this.pressed.add(event.code);
-      const slot = ['Digit1', 'Digit2', 'Digit3', 'Digit4'].indexOf(event.code);
+      const slot = WEAPON_ORDER.findIndex((_, index) => event.code === `Digit${index + 1}`);
       if (slot >= 0) this.setWeapon(WEAPON_ORDER[slot]);
+      if (event.code === 'KeyJ' || event.code === 'KeyK' || event.code === 'KeyL') this.sfx.unlock();
+      if (event.code === 'KeyK' || event.code === 'KeyL') {
+        const weapon = event.code === 'KeyK' ? 'sword' : 'hammer';
+        this.setWeapon(weapon);
+        this.keyboardAttack = { weapon, ttl: 1.4 };
+      }
     });
     window.addEventListener('keyup', (event) => this.keys.delete(event.code));
     window.addEventListener('blur', () => { this.keys.clear(); this.mouseFiring = false; if (this.mode === 'game' && !this.touchMode()) this.pause(); });
@@ -540,7 +562,8 @@ export class CombatGame {
     const impact = can && (this.consumePressed('KeyF') || (touch?.consume('impact') ?? false));
     if (this.consumePressed('KeyR') && can) this.cycleWeapon(1);
     this.pressed.clear();
-    return { input, firing: can && (this.mouseFiring || (touch?.fire ?? false) || this.keys.has('KeyJ')), impact };
+    const directMelee = (this.state.weapon === 'sword' && this.keys.has('KeyK')) || (this.state.weapon === 'hammer' && this.keys.has('KeyL'));
+    return { input, firing: can && (this.mouseFiring || (touch?.fire ?? false) || this.keys.has('KeyJ') || directMelee || this.keyboardAttack?.weapon === this.state.weapon), impact };
   }
 
   // ---------------------------------------------------------------- player
@@ -559,6 +582,10 @@ export class CombatGame {
     this.sfx.setJet(this.jetSound);
 
     if (!this.playerDown) {
+      if (this.keyboardAttack) {
+        this.keyboardAttack.ttl -= dt;
+        if (this.keyboardAttack.ttl <= 0) this.keyboardAttack = null;
+      }
       const fire = stepTrigger(s, firing, dt);
       const def = WEAPONS[s.weapon];
       if (def.kind === 'charge') {
@@ -567,7 +594,7 @@ export class CombatGame {
         if (s.charge <= 0 && this.chargingSound) { this.sfx.stopCharge(); this.chargingSound = false; }
       } else if (this.chargingSound) { this.sfx.stopCharge(); this.chargingSound = false; }
       this.player.setCharge(def.kind === 'charge' ? s.charge / def.chargeTime : 0);
-      if (fire) this.fireWeapon(fire);
+      if (fire) { this.keyboardAttack = null; this.fireWeapon(fire); }
       if (s.overheated && s.sinceShot < dt * 1.5) { this.sfx.overheat(); this.onToast?.('ARMA SUPERAQUECIDA'); }
       if (impact) this.impact();
     }
@@ -668,9 +695,34 @@ export class CombatGame {
     const seed = (Math.random() * 0xffffffff) >>> 0;
     this.player.kick(def.recoil);
     this.fx.shake(def.shake);
-    this.fx.muzzleFlash(this.player.muzzle, def.color, def.id === 'shotgun' ? 1.2 : def.id === 'laser' ? 0.6 + cmd.charge : 0.65);
+    if (def.kind !== 'melee') this.fx.muzzleFlash(this.player.muzzle, def.color, def.id === 'shotgun' ? 1.2 : def.id === 'laser' ? 0.6 + cmd.charge : 0.65);
     this.pitch = Math.max(-0.42, this.pitch - def.recoil * 0.025);
     this.stats.shots++;
+
+    if (def.kind === 'melee') {
+      const base = new Vector3(this.state.x, this.state.y, this.state.z);
+      const forward = new Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw));
+      const impact = base.add(forward.scale(def.id === 'hammer' ? 2.5 : 2.2));
+      impact.y = this.world.deckY + 0.12;
+      this.player.punch();
+      this.sfx.impact();
+      this.fx.shockwave(impact, def.id === 'hammer' ? def.splashRadius : 3.1, def.color, 0.3, def.id === 'hammer' ? 0.34 : 0.12);
+      this.fx.sparks(impact.add(new Vector3(0, 1.1, 0)), def.color, def.id === 'hammer' ? 22 : 14, 1.1);
+      if (this.session === 'online') { this.online?.fire(cmd, origin, dir, seed); return; }
+      let hit = false;
+      for (const enemy of this.enemies) {
+        if (!enemy.alive) continue;
+        const target = enemy.position;
+        const arc = meleeInArc(this.yaw, base, target, def.range + enemy.scale * 0.4, def.id === 'sword' ? 0.9 : 0.72);
+        const shock = def.id === 'hammer' && enemy.position.y <= this.world.deckY + 2.6 && Vector3.Distance(new Vector3(target.x, impact.y, target.z), impact) <= def.splashRadius;
+        if ((!arc && !shock) || !this.world.arena.lineOfSight(base.add(new Vector3(0, 1.6, 0)), enemy.center)) continue;
+        const amount = arc ? meleeDamage(def.id, this.state.meleeCombo - 1) : def.splashDamage;
+        this.damageEnemy(enemy, amount, false, enemy.center, def.knockback * (arc ? 1 : 0.55), base);
+        hit = true;
+      }
+      if (hit) this.stats.hits++;
+      return;
+    }
 
     if (def.id === 'missile') {
       const lock = this.findLock(origin, dir);
@@ -683,7 +735,7 @@ export class CombatGame {
 
     const directions = def.pellets > 1 ? spreadDirections(dir, def.pellets, def.spread, seed) : [{ x: dir.x, y: dir.y, z: dir.z }];
     const ends: Vector3[] = [];
-    const damageByTarget = new Map<Enemy, { amount: number; crit: boolean; at: Vector3 }>();
+    const damageByTarget = new Map<Enemy, { amount: number; crit: boolean; at: Vector3; zone: HitZone }>();
     for (const d of directions) {
       const pd = new Vector3(d.x, d.y, d.z);
       const range = def.range;
@@ -691,10 +743,10 @@ export class CombatGame {
       const barrel = this.barrelHit(origin, pd, coverT ?? range);
       let limit = barrel ? barrel.t : coverT ?? range;
       if (pd.y < -0.01) { const deckT = (this.world.deckY - origin.y) / pd.y; if (deckT > 0) limit = Math.min(limit, deckT); }
-      const hits: Array<{ t: number; crit: boolean; enemy?: Enemy; remote?: RemoteTarget }> = [];
+      const hits: Array<{ t: number; crit: boolean; zone: HitZone; enemy?: Enemy; remote?: RemoteTarget }> = [];
       for (const target of this.collectTargets()) {
-        const hit = target.flying ? (() => { const v = raySphere(origin, pd, limit, target.base, 1.15); return v === null ? null : { t: v, critical: false }; })() : rayMech(origin, pd, limit, target.base, target.scale);
-        if (hit) hits.push({ t: hit.t, crit: hit.critical, enemy: target.enemy, remote: target.remote });
+        const hit = target.flying ? (() => { const v = raySphere(origin, pd, limit, target.base, 1.15); return v === null ? null : { t: v, critical: false, zone: 'torso' as HitZone }; })() : rayMech(origin, pd, limit, target.base, target.scale);
+        if (hit) hits.push({ t: hit.t, crit: hit.critical, zone: hit.zone, enemy: target.enemy, remote: target.remote });
       }
       hits.sort((a, b) => a.t - b.t);
       const applied = def.pierce ? hits : hits.slice(0, 1);
@@ -705,9 +757,10 @@ export class CombatGame {
         const base = def.kind === 'charge' ? laserDamage(cmd.charge) : damageAtDistance(def, def.damage, hit.t);
         const amount = base * (hit.crit ? 1.5 : 1);
         if (hit.enemy) {
-          const entry = damageByTarget.get(hit.enemy) ?? { amount: 0, crit: false, at };
+          const entry = damageByTarget.get(hit.enemy) ?? { amount: 0, crit: false, at, zone: hit.zone };
           entry.amount += amount;
           entry.crit ||= hit.crit;
+          if (hit.crit) entry.zone = hit.zone;
           damageByTarget.set(hit.enemy, entry);
         } else if (hit.remote) {
           this.onHit?.(hit.crit, false);
@@ -742,7 +795,7 @@ export class CombatGame {
       return;
     }
     if (damageByTarget.size) this.stats.hits++;
-    for (const [enemy, info] of damageByTarget) this.damageEnemy(enemy, info.amount, info.crit, info.at, def.knockback * Math.min(1, info.amount / (def.damage * def.pellets * 0.6)), origin);
+    for (const [enemy, info] of damageByTarget) this.damageEnemy(enemy, info.amount, info.crit, info.at, def.knockback * Math.min(1, info.amount / (def.damage * def.pellets * 0.6)), origin, info.zone);
   }
 
   private findLock(origin: Vector3, dir: Vector3): Enemy | null {
@@ -797,9 +850,9 @@ export class CombatGame {
   }
 
   // --------------------------------------------------------------- damage
-  private damageEnemy(enemy: Enemy, amount: number, crit: boolean, at: Vector3, knockback: number, from: Vector3): void {
+  private damageEnemy(enemy: Enemy, amount: number, crit: boolean, at: Vector3, knockback: number, from: Vector3, zone: HitZone = 'torso'): void {
     if (!enemy.alive) return;
-    const killed = enemy.takeDamage(amount, from, knockback);
+    const killed = enemy.takeDamage(amount, from, knockback, zone);
     this.stats.damageDealt += amount;
     if (crit) this.stats.crits++;
     this.score += Math.round(amount * (crit ? 1.5 : 1));
@@ -835,10 +888,11 @@ export class CombatGame {
     this.pendingExplosions.push({ at: barrel.position.add(new Vector3(0, 0.7, 0)), radius: 5.5, damage: 70, source: 'barrel' });
   }
 
-  private damagePlayer(amount: number, from: Vector3, knockback: number, source: string): void {
+  private damagePlayer(amount: number, from: Vector3, knockback: number, source: string, projectile = false): void {
     if (this.session !== 'training' || this.playerDown || this.finished) return;
     const s = this.state;
-    const taken = damageTaken(s, amount);
+    const taken = damageTaken(s, amount, projectile);
+    if (taken <= 0 && projectile && s.parryTime > 0) this.sfx.shieldHit();
     if (taken <= 0) return;
     if (s.shieldTime > 0) this.sfx.shieldHit(); else this.sfx.playerHurt();
     s.health = Math.max(0, s.health - taken);
@@ -1032,7 +1086,7 @@ export class CombatGame {
       if (hitWhat === null && next.y < this.world.deckY + 0.05 && arena.onDeck(next.x, next.z, 0)) { hitT = len; hitWhat = 'deck'; }
       if (hitWhat === null) { p.pos.copyFrom(next); continue; }
       const at = p.pos.add(dir.scale(hitT ?? len));
-      if (hitWhat === 'player') this.damagePlayer(p.damage, p.owner?.position ?? p.pos, p.kind === 'missile' ? 3 : 0.6, p.owner?.def.name ?? 'PROJÉTIL');
+      if (hitWhat === 'player') this.damagePlayer(p.damage, p.owner?.position ?? p.pos, p.kind === 'missile' ? 3 : 0.6, p.owner?.def.name ?? 'PROJÉTIL', true);
       if (hitWhat === 'enemy' && hitEnemy) this.stats.hits++;
       if (hitWhat === 'enemy' && hitEnemy) this.damageEnemy(hitEnemy, p.damage, false, at, WEAPONS.missile.knockback, p.pos);
       if (hitWhat === 'barrel' && hitBarrel) this.damageBarrel(hitBarrel, p.damage + p.splashDamage, p.hostile ? 'enemy' : 'player');
@@ -1097,7 +1151,9 @@ export class CombatGame {
   private updateTraining(dt: number): void {
     if (!this.finished) this.stats.time += dt;
     // Out-of-combat repair keeps the pace up between skirmishes.
-    if (!this.playerDown && this.time - this.lastHurt > 4.5 && this.state.health < MOVE.maxHealth) this.state.health = Math.min(MOVE.maxHealth, this.state.health + dt * 3.5);
+    const repairDelay = this.difficulty === 'recruit' ? 3 : 4.5;
+    const repairRate = this.difficulty === 'recruit' ? 8 : this.difficulty === 'veteran' ? 5 : 3.5;
+    if (!this.playerDown && this.time - this.lastHurt > repairDelay && this.state.health < MOVE.maxHealth) this.state.health = Math.min(MOVE.maxHealth, this.state.health + dt * repairRate);
     this.comboTime = Math.max(0, this.comboTime - dt);
     if (this.comboTime === 0) this.combo = 1;
     const ctx = this.aiContext();
@@ -1148,6 +1204,15 @@ export class CombatGame {
     const bonus = 750 * wave;
     this.score += bonus;
     this.waveActive = false;
+    // Every completed wave gives breathing room, even when the supply crate is far away.
+    const repair = this.difficulty === 'recruit' ? 40 : this.difficulty === 'veteran' ? 22 : 0;
+    if (repair > 0 && !this.playerDown) {
+      this.state.health = Math.min(MOVE.maxHealth, this.state.health + repair);
+      this.state.energy = Math.min(100, this.state.energy + 45);
+      this.state.heat = Math.max(0, this.state.heat - 50);
+      if (this.state.heat < MOVE.overheatRecover) this.state.overheated = false;
+      this.float(this.player.root.position.add(new Vector3(0, 3.8, 0)), `+${repair} REPARO`, 'heal');
+    }
     if (this.waveIndex >= WAVES.length - 1) {
       this.sfx.victory();
       this.finish(true);
@@ -1272,7 +1337,7 @@ export class CombatGame {
       // In portrait the UI sits at the bottom, so frame the mech in the upper half.
       const focus = player.add(new Vector3(0, portrait ? (this.mode === 'garage' ? -0.9 : 0.6) : 1.7, 0));
       // Landscape garage: shift the framing so the mech sits right of the side panel.
-      if (!portrait && this.mode === 'garage') focus.addInPlace(new Vector3(-Math.cos(angle), 0, Math.sin(angle)).scale(1.9));
+      if (!portrait && this.mode === 'garage') focus.addInPlace(new Vector3(Math.cos(angle), 0, -Math.sin(angle)).scale(2.35));
       const height = 2.2;
       const desired = focus.add(new Vector3(Math.sin(angle) * distance, height, Math.cos(angle) * distance));
       this.camera.position = Vector3.Lerp(this.camera.position, desired, dt === 0 ? 1 : Math.min(1, dt * 2.2));

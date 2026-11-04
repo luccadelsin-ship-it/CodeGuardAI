@@ -1,16 +1,18 @@
 import { Vector3, type Scene } from '@babylonjs/core';
-import { MODE_RULES, PROTOCOL_VERSION, type ClientMessage, type InputFrame, type MatchPhase, type OnlineMode, type PlayerInfo, type PlayerSnap, type ServerMessage } from '../shared/protocol';
+import { MODE_RULES, PROTOCOL_VERSION, type ClientMessage, type InputFrame, type MatchPhase, type OnlineMode, type PlayerInfo, type PlayerSnap, type ServerMessage, type Team } from '../shared/protocol';
 import { stepMech, type FireCommand, type MechInput, type MechState } from '../shared/sim';
 import { WEAPONS, type WeaponId } from '../shared/weapons';
 import type { CombatGame, OnlineBridge, RemoteTarget, ResultInfo } from '../game/combat';
 import { createMech, type MechPalette, type MechVisual } from '../game/mech';
+import { mapFromSearch } from '../shared/maps';
+import type { MechPartConfig } from '../shared/customization';
 
 const INTERP_DELAY = 0.1;
 const now = () => performance.now() / 1000;
 
-export interface OnlineOptions { url: string; name: string; palette: MechPalette; weapon: WeaponId; mode: OnlineMode; room?: string; create?: boolean }
+export interface OnlineOptions { url: string; name: string; palette: MechPalette; weapon: WeaponId; mode: OnlineMode; parts?: MechPartConfig; room?: string; create?: boolean }
 
-export interface ScoreRow { id: number; name: string; kills: number; deaths: number; score: number; ping: number; me: boolean }
+export interface ScoreRow { id: number; name: string; kills: number; deaths: number; score: number; ping: number; me: boolean; team: Team }
 
 export interface OnlineCallbacks {
   onFeed?(text: string): void;
@@ -40,10 +42,13 @@ export class OnlineSession implements OnlineBridge {
   myId = -1;
   room = '';
   mode: OnlineMode = 'ffa';
+  team: Team = null;
   isPrivate = false;
   phase: MatchPhase = 'waiting';
   timer = 0;
   ping = 0;
+  teamScores: [number, number] = [0, 0];
+  coreOwner: Team = null;
   private ws: WebSocket;
   private readonly remotes = new Map<number, Remote>();
   private readonly pending: InputFrame[] = [];
@@ -75,7 +80,7 @@ export class OnlineSession implements OnlineBridge {
       const timeout = window.setTimeout(() => { ws.close(); reject(new Error('Tempo esgotado ao conectar ao servidor.')); }, 8000);
       let welcomed = false;
       ws.addEventListener('open', () => {
-        session.send({ t: 'hello', v: PROTOCOL_VERSION, name: options.name, palette: options.palette, weapon: options.weapon, mode: options.mode, room: options.room, create: options.create });
+        session.send({ t: 'hello', v: PROTOCOL_VERSION, name: options.name, palette: options.palette, weapon: options.weapon, mode: options.mode, map: mapFromSearch(location.search), parts: options.parts, room: options.room, create: options.create });
       });
       ws.addEventListener('message', (event) => {
         let message: ServerMessage;
@@ -213,6 +218,7 @@ export class OnlineSession implements OnlineBridge {
       r.info = info;
       r.visual.setPalette(info.palette);
     }
+    r.visual.setParts(info.parts);
     this.names.set(info.id, info.name);
     return r;
   }
@@ -228,7 +234,7 @@ export class OnlineSession implements OnlineBridge {
         this.isPrivate = message.private;
         this.offset = message.time - now();
         for (const p of message.players) {
-          if (p.id === this.myId) { this.names.set(p.id, p.name); continue; }
+          if (p.id === this.myId) { this.names.set(p.id, p.name); this.team = p.team; continue; }
           this.ensureRemote(p);
         }
         break;
@@ -262,15 +268,17 @@ export class OnlineSession implements OnlineBridge {
         const def = WEAPONS[message.weapon];
         const muzzle = r.visual.muzzle.getAbsolutePosition();
         r.visual.kick(def.recoil);
-        this.game.fx.muzzleFlash(r.visual.muzzle, def.color, def.id === 'shotgun' ? 1.2 : 0.7);
+        if (def.kind === 'melee') r.visual.punch();
+        else this.game.fx.muzzleFlash(r.visual.muzzle, def.color, def.id === 'shotgun' ? 1.2 : 0.7);
         for (const e of message.ends) {
           const end = new Vector3(e[0], e[1], e[2]);
-          if (def.id === 'laser') this.game.fx.beam(muzzle, end, def.color, 0.12 + message.charge * 0.2);
+          if (def.kind === 'melee') this.game.fx.shockwave(end, def.id === 'hammer' ? def.splashRadius : 3.1, def.color, 0.3, def.id === 'hammer' ? 0.34 : 0.12);
+          else if (def.id === 'laser') this.game.fx.beam(muzzle, end, def.color, 0.12 + message.charge * 0.2);
           else this.game.fx.tracer(muzzle, end, def.color, def.id === 'shotgun' ? 0.035 : 0.055, 0.08);
         }
         const d = Vector3.Distance(muzzle, this.game.player.root.position);
         if (d < 45) {
-          if (def.id === 'laser') this.game.sfx.laser(message.charge); else if (def.id === 'shotgun') this.game.sfx.shotgun(); else if (def.id === 'missile') this.game.sfx.missile(); else this.game.sfx.mg();
+          if (def.kind === 'melee') this.game.sfx.impact(); else if (def.id === 'laser') this.game.sfx.laser(message.charge); else if (def.id === 'shotgun') this.game.sfx.shotgun(); else if (def.id === 'missile') this.game.sfx.missile(); else this.game.sfx.mg();
         }
         break;
       }
@@ -280,9 +288,10 @@ export class OnlineSession implements OnlineBridge {
           const shooter = this.remotes.get(message.by);
           this.game.showIncomingHit(message.amount, shooter?.position ?? at);
           this.game.state.health = message.hp;
+          if (message.detached) this.game.player.detachPart(message.zone);
         } else {
           const r = this.remotes.get(message.target);
-          if (r) { r.visual.flashHit(); r.hp = message.hp; }
+          if (r) { r.visual.flashHit(); r.hp = message.hp; if (message.detached) r.visual.detachPart(message.zone); }
           if (message.by === this.myId) this.game.showOutgoingHit(at, message.amount, message.crit, message.hp <= 0);
           else this.game.fx.sparks(at, [1, 0.8, 0.4], 6, 0.6);
         }
@@ -311,7 +320,7 @@ export class OnlineSession implements OnlineBridge {
           this.game.respawnAt(at, message.yaw);
         } else {
           const r = this.remotes.get(message.id);
-          if (r) { r.buffer.length = 0; r.position.copyFrom(at); r.alive = true; r.hp = 100; }
+          if (r) { r.buffer.length = 0; r.position.copyFrom(at); r.alive = true; r.hp = 100; r.visual.restoreParts(); }
           this.game.fx.pillar(at, [0.4, 0.9, 1], 1);
         }
         break;
@@ -362,9 +371,11 @@ export class OnlineSession implements OnlineBridge {
     if (!this.offsetReady) this.offset = snap.time - now();
     this.phase = snap.phase;
     this.timer = snap.timer;
+    this.teamScores = snap.teamScores;
+    this.coreOwner = snap.coreOwner;
     const rows: ScoreRow[] = [];
     for (const p of snap.players) {
-      rows.push({ id: p.id, name: this.name(p.id), kills: p.kills, deaths: p.deaths, score: p.score, ping: p.ping, me: p.id === this.myId });
+      rows.push({ id: p.id, name: this.name(p.id), kills: p.kills, deaths: p.deaths, score: p.score, ping: p.ping, me: p.id === this.myId, team: p.team });
       if (p.id === this.myId) {
         this.alive = p.alive;
         this.game.setOnlineScore(p.score, p.kills);

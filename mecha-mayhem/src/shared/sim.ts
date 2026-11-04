@@ -1,4 +1,4 @@
-import type { Arena } from './arena.ts';
+import type { Arena, HitZone } from './arena.ts';
 import { WEAPONS, laserEnergy, type WeaponDef, type WeaponId } from './weapons.ts';
 
 /** Movement tuning. Shared by client prediction and the online server. */
@@ -55,6 +55,10 @@ export interface MechState {
   shieldCd: number; shieldTime: number;
   impactCd: number;
   invulnerable: number;
+  meleeCombo: number;
+  meleeWindow: number;
+  parryTime: number;
+  parts: Record<HitZone, number>;
 }
 
 export interface MechInput {
@@ -83,6 +87,8 @@ export function createMechState(x: number, y: number, z: number, yaw: number, we
     x, y, z, vx: 0, vy: 0, vz: 0, pushX: 0, pushZ: 0, yaw, pitch: 0.12, grounded: true, jumpHeld: false, jetting: false,
     health: MOVE.maxHealth, energy: 100, energyDelay: 0, heat: 0, overheated: false, sinceShot: 9, bloom: 0, charge: 0,
     fireCd: 0, weapon, dashCd: 0, dashTime: 0, dashX: 0, dashZ: 1, shieldCd: 0, shieldTime: 0, impactCd: 0, invulnerable: 0,
+    meleeCombo: 0, meleeWindow: 0, parryTime: 0,
+    parts: { head: 45, torso: 120, leftArm: 55, rightArm: 55, leftLeg: 65, rightLeg: 65 },
   };
 }
 
@@ -111,6 +117,7 @@ export function stepMech(s: MechState, input: MechInput, dt: number, arena: Aren
   const def = WEAPONS[s.weapon];
   const charging = def.kind === 'charge' && s.charge > 0;
   let speed = (input.sprint && !charging ? MOVE.sprint : MOVE.walk) * def.weight * (charging ? 0.7 : 1);
+  speed *= 1 - (s.parts.leftLeg <= 0 ? 0.24 : 0) - (s.parts.rightLeg <= 0 ? 0.24 : 0);
   if (mz < -0.1) speed *= MOVE.backwards;
 
   // Abilities.
@@ -119,6 +126,8 @@ export function stepMech(s: MechState, input: MechInput, dt: number, arena: Aren
   s.shieldTime = Math.max(0, s.shieldTime - dt);
   s.impactCd = Math.max(0, s.impactCd - dt);
   s.invulnerable = Math.max(0, s.invulnerable - dt);
+  s.meleeWindow = Math.max(0, s.meleeWindow - dt);
+  s.parryTime = Math.max(0, s.parryTime - dt);
   if (input.dash && s.dashCd <= 0 && s.dashTime <= 0 && s.energy >= MOVE.dashCost) {
     const len = Math.hypot(wishX, wishZ);
     s.dashX = len > 0.1 ? wishX / len : sin;
@@ -199,6 +208,16 @@ export function stepMech(s: MechState, input: MechInput, dt: number, arena: Aren
 
 export interface FireCommand { weapon: WeaponId; charge: number }
 
+export function weaponOperational(s: MechState): boolean {
+  return s.parts.rightArm > 0;
+}
+
+export function applyPartDamage(s: MechState, zone: HitZone, amount: number): boolean {
+  const before = s.parts[zone];
+  s.parts[zone] = Math.max(0, before - amount);
+  return before > 0 && s.parts[zone] === 0;
+}
+
 /**
  * Trigger handling shared by the client and the server. Returns a fire command
  * when the weapon actually discharges, after paying heat/energy.
@@ -225,7 +244,7 @@ export function stepTrigger(s: MechState, held: boolean, dt: number): FireComman
     if (!held) s.charge = 0;
     return null;
   }
-  if (!held || s.fireCd > 0 || s.overheated) return null;
+  if (!held || s.fireCd > 0 || s.overheated || !weaponOperational(s) || (def.kind === 'melee' && s.energy < def.energy)) return null;
   applyShotCost(s, def);
   return { weapon: def.id, charge: 1 };
 }
@@ -236,19 +255,29 @@ export function applyShotCost(s: MechState, def: WeaponDef): void {
   s.heat = Math.min(100, s.heat + def.heat);
   s.bloom = Math.min(def.maxBloom, s.bloom + def.bloom);
   if (s.heat >= 100) s.overheated = true;
+  if (def.kind === 'melee') {
+    if (s.meleeWindow <= 0) s.meleeCombo = 0;
+    s.meleeCombo = (s.meleeCombo % (def.id === 'sword' ? 3 : 2)) + 1;
+    s.meleeWindow = def.id === 'sword' ? 1.15 : 1.8;
+    if (def.id === 'sword') s.parryTime = 0.34;
+    spendEnergy(s, def.energy);
+  }
 }
 
 export function switchWeapon(s: MechState, weapon: WeaponId): boolean {
   if (s.weapon === weapon) return false;
   s.weapon = weapon;
   s.charge = 0;
+  s.meleeCombo = 0;
+  s.meleeWindow = 0;
   s.fireCd = Math.max(s.fireCd, 0.28);
   return true;
 }
 
 /** Damage multiplier for incoming hits: shields and dashes soak damage. */
-export function damageTaken(s: MechState, amount: number): number {
+export function damageTaken(s: MechState, amount: number, projectile = false): number {
   if (s.invulnerable > 0) return 0;
+  if (projectile && s.parryTime > 0) return 0;
   let result = amount;
   if (s.shieldTime > 0) result *= 0.25;
   if (s.dashTime > 0) result *= 0.4;

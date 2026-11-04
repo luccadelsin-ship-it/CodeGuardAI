@@ -1,0 +1,31 @@
+{
+  "visualAsset": "procedural:canyon",
+  "deckTopY": 0.56,
+  "centralArena": { "x": 0, "z": 0, "radius": 12 },
+  "bridges": [
+    { "name": "east", "x": 17, "z": 0, "widthX": 15.5, "widthZ": 8.5 },
+    { "name": "west", "x": -17, "z": 0, "widthX": 15.5, "widthZ": 8.5 },
+    { "name": "north", "x": 0, "z": -17, "widthX": 8.5, "widthZ": 15.5 },
+    { "name": "south", "x": 0, "z": 17, "widthX": 8.5, "widthZ": 15.5 }
+  ],
+  "stations": [
+    { "x": 27, "z": 0, "radius": 8.3 }, { "x": -27, "z": 0, "radius": 8.3 },
+    { "x": 0, "z": -27, "radius": 8.3 }, { "x": 0, "z": 27, "radius": 8.3 }
+  ],
+  "cover": [
+    { "x": -4.5, "z": 1.5, "widthX": 2.6, "widthZ": 2.6, "height": 2.7 },
+    { "x": 4.5, "z": -1.5, "widthX": 2.6, "widthZ": 2.6, "height": 2.7 },
+    { "x": 0, "z": 8.5, "widthX": 4, "widthZ": 1.2, "height": 1.2 },
+    { "x": 0, "z": -8.5, "widthX": 4, "widthZ": 1.2, "height": 1.2 },
+    { "x": 18.5, "z": -2.4, "widthX": 2.8, "widthZ": 1.4, "height": 1.5 },
+    { "x": -18.5, "z": 2.4, "widthX": 2.8, "widthZ": 1.4, "height": 1.5 },
+    { "x": -2.4, "z": -18.5, "widthX": 1.4, "widthZ": 2.8, "height": 1.5 },
+    { "x": 2.4, "z": 18.5, "widthX": 1.4, "widthZ": 2.8, "height": 1.5 }
+  ],
+  "spawns": [
+    { "x": 27, "y": 0.56, "z": 0, "yaw": -1.57079632679 },
+    { "x": -27, "y": 0.56, "z": 0, "yaw": 1.57079632679 },
+    { "x": 0, "y": 0.56, "z": -27, "yaw": 0 },
+    { "x": 0, "y": 0.56, "z": 27, "yaw": 3.14159265359 }
+  ]
+}

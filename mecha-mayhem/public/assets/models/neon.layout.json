@@ -1,0 +1,37 @@
+{
+  "visualAsset": "procedural:neon",
+  "deckTopY": 0.56,
+  "centralArena": { "x": 0, "z": 0, "radius": 11.5 },
+  "bridges": [
+    { "name": "east", "x": 17, "z": 0, "widthX": 15.5, "widthZ": 6.4 },
+    { "name": "west", "x": -17, "z": 0, "widthX": 15.5, "widthZ": 6.4 },
+    { "name": "north", "x": 0, "z": -17, "widthX": 6.4, "widthZ": 15.5 },
+    { "name": "south", "x": 0, "z": 17, "widthX": 6.4, "widthZ": 15.5 },
+    { "name": "outer-east", "x": 23, "z": 0, "widthX": 5, "widthZ": 46 },
+    { "name": "outer-west", "x": -23, "z": 0, "widthX": 5, "widthZ": 46 },
+    { "name": "outer-north", "x": 0, "z": -23, "widthX": 46, "widthZ": 5 },
+    { "name": "outer-south", "x": 0, "z": 23, "widthX": 46, "widthZ": 5 }
+  ],
+  "stations": [
+    { "x": 27, "z": 0, "radius": 7.3 }, { "x": -27, "z": 0, "radius": 7.3 },
+    { "x": 0, "z": -27, "radius": 7.3 }, { "x": 0, "z": 27, "radius": 7.3 },
+    { "x": 23, "z": 23, "radius": 4.2 }, { "x": -23, "z": -23, "radius": 4.2 },
+    { "x": 23, "z": -23, "radius": 4.2 }, { "x": -23, "z": 23, "radius": 4.2 }
+  ],
+  "cover": [
+    { "x": 0, "z": 6, "widthX": 3.5, "widthZ": 1.2, "height": 1.7 },
+    { "x": 0, "z": -6, "widthX": 3.5, "widthZ": 1.2, "height": 1.7 },
+    { "x": 6.5, "z": 0, "widthX": 1.3, "widthZ": 3.5, "height": 1.7 },
+    { "x": -6.5, "z": 0, "widthX": 1.3, "widthZ": 3.5, "height": 1.7 },
+    { "x": 23, "z": 12, "widthX": 1.1, "widthZ": 2.6, "height": 1.4 },
+    { "x": -23, "z": -12, "widthX": 1.1, "widthZ": 2.6, "height": 1.4 },
+    { "x": 12, "z": -23, "widthX": 2.6, "widthZ": 1.1, "height": 1.4 },
+    { "x": -12, "z": 23, "widthX": 2.6, "widthZ": 1.1, "height": 1.4 }
+  ],
+  "spawns": [
+    { "x": 27, "y": 0.56, "z": 0, "yaw": -1.57079632679 },
+    { "x": -27, "y": 0.56, "z": 0, "yaw": 1.57079632679 },
+    { "x": 0, "y": 0.56, "z": -27, "yaw": 0 },
+    { "x": 0, "y": 0.56, "z": 27, "yaw": 3.14159265359 }
+  ]
+}

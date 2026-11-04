@@ -1,11 +1,13 @@
 /** Attaches the Mecha Mayhem online service to any Node HTTP server at /online. */
 import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import type { IncomingMessage, Server } from 'node:http';
 import type { Duplex } from 'node:stream';
 import { WebSocketServer, type WebSocket } from 'ws';
 import type { ArenaLayout } from '../src/shared/arena.ts';
-import { PROTOCOL_VERSION, type ClientMessage, type OnlineMode, type ServerMessage } from '../src/shared/protocol.ts';
+import { PROTOCOL_VERSION, type ClientMessage, type MapId, type OnlineMode, type ServerMessage } from '../src/shared/protocol.ts';
 import { Room } from './room.ts';
+import { MAPS, MAP_ORDER, isMapId } from '../src/shared/maps.ts';
 
 const TICK = 1 / 30;
 
@@ -32,6 +34,7 @@ function cleanName(raw: unknown): string {
 
 export function createGameServer(layoutPath: string, path = '/online'): GameServer {
   const layout = JSON.parse(readFileSync(layoutPath, 'utf8')) as ArenaLayout;
+  const layouts = Object.fromEntries(MAP_ORDER.map((id) => [id, id === 'frozen' ? layout : JSON.parse(readFileSync(join(dirname(layoutPath), MAPS[id].layoutFile), 'utf8')) as ArenaLayout])) as Record<MapId, ArenaLayout>;
   const rooms = new Map<string, Room>();
   const wss = new WebSocketServer({ noServer: true, maxPayload: 32 * 1024 });
 
@@ -63,26 +66,29 @@ export function createGameServer(layoutPath: string, path = '/online'): GameServ
       if (!room) {
         if (message.t !== 'hello') return;
         if (message.v !== PROTOCOL_VERSION) { send({ t: 'error', message: 'Versão do jogo diferente da do servidor. Recarregue a página.' }); ws.close(); return; }
-        const mode: OnlineMode = message.mode === 'duel' ? 'duel' : 'ffa';
+        const mode: OnlineMode = message.mode in { duel: 1, team2: 1, team5: 1, core: 1 } ? message.mode : 'ffa';
+        const mapId: MapId = isMapId(message.map) ? message.map : 'frozen';
+        const selectedLayout = layouts[mapId];
         if (message.room) {
           const found = rooms.get(String(message.room).toUpperCase());
           if (!found) { send({ t: 'error', message: 'Sala não encontrada.' }); return; }
           if (found.full) { send({ t: 'error', message: 'Sala cheia.' }); return; }
+          if (found.mapId !== mapId) { send({ t: 'error', message: 'Esta sala usa outro mapa. Selecione o mapa correto no menu.' }); return; }
           room = found;
         } else if (message.create) {
           const code = roomCode(rooms);
-          room = new Room(code, mode, true, layout);
+          room = new Room(code, mode, true, selectedLayout, mapId);
           rooms.set(code, room);
         } else {
-          room = [...rooms.values()].find((r) => !r.isPrivate && r.mode === mode && !r.full && r.phase !== 'ended')
-            ?? [...rooms.values()].find((r) => !r.isPrivate && r.mode === mode && !r.full) ?? null;
+          room = [...rooms.values()].find((r) => !r.isPrivate && r.mode === mode && r.mapId === mapId && !r.full && r.phase !== 'ended')
+            ?? [...rooms.values()].find((r) => !r.isPrivate && r.mode === mode && r.mapId === mapId && !r.full) ?? null;
           if (!room) {
             const code = roomCode(rooms);
-            room = new Room(code, mode, false, layout);
+            room = new Room(code, mode, false, selectedLayout, mapId);
             rooms.set(code, room);
           }
         }
-        playerId = room.join(conn, cleanName(message.name), message.palette, message.weapon).id;
+        playerId = room.join(conn, cleanName(message.name), message.palette, message.weapon, message.parts).id;
         return;
       }
       room.handle(playerId, message);

@@ -30,8 +30,8 @@ export interface DifficultyDef {
 }
 
 export const DIFFICULTIES: Record<Difficulty, DifficultyDef> = {
-  recruit: { label: 'RECRUTA', damage: 0.6, health: 0.8, reaction: 1.35, lead: 0.25, error: 0.06, aggression: 0.7 },
-  veteran: { label: 'VETERANO', damage: 1, health: 1, reaction: 1, lead: 0.6, error: 0.035, aggression: 1 },
+  recruit: { label: 'RECRUTA', damage: 0.45, health: 0.6, reaction: 1.65, lead: 0.15, error: 0.085, aggression: 0.55 },
+  veteran: { label: 'VETERANO', damage: 0.82, health: 0.9, reaction: 1.12, lead: 0.5, error: 0.045, aggression: 0.9 },
   elite: { label: 'ELITE', damage: 1.35, health: 1.25, reaction: 0.78, lead: 0.9, error: 0.018, aggression: 1.3 },
 };
 
@@ -236,6 +236,7 @@ export class Enemy {
   readonly wasp?: ReturnType<typeof createWaspVisual>;
   readonly root: TransformNode;
   health: number;
+  parts = { head: 45, torso: 120, leftArm: 55, rightArm: 55, leftLeg: 65, rightLeg: 65 };
   maxHealth: number;
   alive = true;
   state: AiState = 'spawn';
@@ -300,10 +301,13 @@ export class Enemy {
   get stateLabel(): string { return this.state; }
 
   /** Apply damage from the player; returns true if it killed the enemy. */
-  takeDamage(amount: number, from: Vector3, knockback: number): boolean {
+  takeDamage(amount: number, from: Vector3, knockback: number, zone: keyof Enemy['parts'] = 'torso'): boolean {
     if (!this.alive) return false;
     if (this.shieldTime > 0) amount *= 0.2;
     this.health -= amount;
+    const before = this.parts[zone];
+    this.parts[zone] = Math.max(0, before - amount);
+    if (before > 0 && this.parts[zone] === 0) this.mech?.detachPart(zone);
     this.recentDamage += amount;
     this.mech?.flashHit();
     this.wasp?.flashHit();
@@ -364,7 +368,7 @@ export class Enemy {
     const distance = toPlayer.length();
     const [minRange, maxRange] = this.def.range;
     let desired = Vector3.Zero();
-    let speed = this.def.speed;
+    let speed = this.def.speed * (this.parts.leftLeg <= 0 ? 0.76 : 1) * (this.parts.rightLeg <= 0 ? 0.76 : 1);
     let face = sees || this.state === 'aim' ? Math.atan2(toPlayer.x, toPlayer.z) : this.yaw;
 
     switch (this.state) {
