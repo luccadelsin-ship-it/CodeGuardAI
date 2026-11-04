@@ -1,0 +1,187 @@
+{
+  "name": "Frozen Outpost",
+  "coordinates": "Babylon Y-up; horizontal X/Z. Arena center is (0, 0, 0).",
+  "visualAsset": "/assets/models/frozen_outpost.glb",
+  "snowTopY": -0.13,
+  "deckTopY": 0.56,
+  "bounds": {
+    "minX": -36,
+    "maxX": 36,
+    "minZ": -36,
+    "maxZ": 36
+  },
+  "centralArena": {
+    "x": 0,
+    "z": 0,
+    "radius": 9.7,
+    "topY": 0.56
+  },
+  "bridges": [
+    {
+      "name": "east",
+      "x": 17,
+      "z": 0,
+      "widthX": 15.5,
+      "widthZ": 5.3
+    },
+    {
+      "name": "west",
+      "x": -17,
+      "z": 0,
+      "widthX": 15.5,
+      "widthZ": 5.3
+    },
+    {
+      "name": "north",
+      "x": 0,
+      "z": -17,
+      "widthX": 5.3,
+      "widthZ": 15.5
+    },
+    {
+      "name": "south",
+      "x": 0,
+      "z": 17,
+      "widthX": 5.3,
+      "widthZ": 15.5
+    }
+  ],
+  "stations": [
+    {
+      "name": "east",
+      "x": 27,
+      "z": 0,
+      "radius": 7.3
+    },
+    {
+      "name": "west",
+      "x": -27,
+      "z": 0,
+      "radius": 7.3
+    },
+    {
+      "name": "north",
+      "x": 0,
+      "z": -27,
+      "radius": 7.3
+    },
+    {
+      "name": "south",
+      "x": 0,
+      "z": 27,
+      "radius": 7.3
+    }
+  ],
+  "spawns": [
+    {
+      "x": 27,
+      "y": 0.82,
+      "z": 0,
+      "yaw": -1.5707963267948966
+    },
+    {
+      "x": -27,
+      "y": 0.82,
+      "z": 0,
+      "yaw": 1.5707963267948966
+    },
+    {
+      "x": 0,
+      "y": 0.82,
+      "z": -27,
+      "yaw": 3.141592653589793
+    },
+    {
+      "x": 0,
+      "y": 0.82,
+      "z": 27,
+      "yaw": 0
+    }
+  ],
+  "cover": [
+    {
+      "x": 27.4,
+      "z": -4.3,
+      "widthX": 2.8,
+      "widthZ": 0.55,
+      "height": 1.45
+    },
+    {
+      "x": 29.5,
+      "z": 3.7,
+      "widthX": 2.8,
+      "widthZ": 0.55,
+      "height": 1.45
+    },
+    {
+      "x": 23.8,
+      "z": 4.35,
+      "widthX": 2.8,
+      "widthZ": 0.55,
+      "height": 1.45
+    },
+    {
+      "x": -27.4,
+      "z": 4.3,
+      "widthX": 2.8,
+      "widthZ": 0.55,
+      "height": 1.45
+    },
+    {
+      "x": -29.5,
+      "z": -3.7,
+      "widthX": 2.8,
+      "widthZ": 0.55,
+      "height": 1.45
+    },
+    {
+      "x": -23.8,
+      "z": -4.35,
+      "widthX": 2.8,
+      "widthZ": 0.55,
+      "height": 1.45
+    },
+    {
+      "x": 4.3,
+      "z": -27.4,
+      "widthX": 0.55,
+      "widthZ": 2.8,
+      "height": 1.45
+    },
+    {
+      "x": -3.7,
+      "z": -29.5,
+      "widthX": 0.55,
+      "widthZ": 2.8,
+      "height": 1.45
+    },
+    {
+      "x": -4.35,
+      "z": -23.8,
+      "widthX": 0.55,
+      "widthZ": 2.8,
+      "height": 1.45
+    },
+    {
+      "x": -4.3,
+      "z": 27.4,
+      "widthX": 0.55,
+      "widthZ": 2.8,
+      "height": 1.45
+    },
+    {
+      "x": 3.7,
+      "z": 29.5,
+      "widthX": 0.55,
+      "widthZ": 2.8,
+      "height": 1.45
+    },
+    {
+      "x": 4.35,
+      "z": 23.8,
+      "widthX": 0.55,
+      "widthZ": 2.8,
+      "height": 1.45
+    }
+  ]
+}

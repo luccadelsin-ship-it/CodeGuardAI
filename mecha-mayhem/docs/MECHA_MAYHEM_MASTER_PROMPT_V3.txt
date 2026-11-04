@@ -1,0 +1,456 @@
+# MECHA MAYHEM — MASTER DEVELOPMENT PROMPT V3.0
+
+Você é um desenvolvedor sênior especializado em jogos 3D, física, multiplayer, programação TypeScript e otimização gráfica.
+
+Sua missão é desenvolver **MECHA MAYHEM**, um jogo de combate entre robôs gigantes, com personalização modular, física, destruição parcial e batalhas multiplayer.
+
+**IMPORTANTE: NÃO CRIE APENAS UM PROTÓTIPO VISUAL. DESENVOLVA UM JOGO REAL, EXECUTÁVEL E TESTÁVEL.**
+
+## 1. TECNOLOGIAS
+
+Utilize:
+
+* Babylon.js — renderização 3D.
+* TypeScript — programação.
+* Vite — desenvolvimento e compilação.
+* Havok Physics — física.
+* Colyseus + Node.js — multiplayer autoritativo.
+* Blender + Python — geração automatizada de modelos 3D.
+* GLB/glTF — modelos.
+* WebGL 2 como renderizador principal, com WebGPU opcional.
+
+O jogo deve funcionar no navegador, com suporte inicial a teclado e mouse.
+
+## 2. IDENTIDADE VISUAL
+
+Estilo 3D low-poly detalhado, com:
+
+* Robôs futuristas.
+* Estruturas industriais.
+* Materiais metálicos.
+* Iluminação cinematográfica.
+* Efeitos de energia.
+* Partículas.
+* Explosões.
+* Sombras dinâmicas.
+* Efeitos de dano.
+* Animações fluidas.
+
+Paleta inicial: branco, laranja, cinza-escuro e iluminação ciano.
+
+Utilize as imagens de referência anexadas para orientar a modelagem dos robôs, armas e mapas.
+
+Não transforme as imagens em simples planos 2D. Construa geometria 3D real.
+
+## 3. ROBÔS MODULARES
+
+Crie seis famílias:
+
+1. Scout — leve e rápido.
+2. Striker — equilibrado.
+3. Titan — pesado e resistente.
+4. Phantom — furtivo e ágil.
+5. Industrial — robusto e mecânico.
+6. Spectre — tecnológico e especializado em energia.
+
+Cada família terá:
+
+* Uma cabeça.
+* Um torso com os braços integrados.
+* Um conjunto de pernas.
+
+As peças devem ser intercambiáveis.
+
+**Os braços não são peças separadas.**
+
+Com seis cabeças, seis torsos e seis conjuntos de pernas, teremos:
+
+**6 × 6 × 6 = 216 combinações estruturais.**
+
+Todas as peças devem possuir pontos de encaixe compatíveis.
+
+Crie modelos 3D em Blender por meio de scripts Python e exporte os arquivos GLB.
+
+## 4. GARAGEM
+
+Crie uma garagem 3D interativa.
+
+O jogador poderá:
+
+* Escolher cabeça.
+* Escolher torso e braços.
+* Escolher pernas.
+* Equipar armas.
+* Selecionar uma habilidade ativa.
+* Personalizar cores.
+* Visualizar o peso total.
+* Consultar velocidade, resistência e energia.
+* Girar e aproximar a câmera.
+* Salvar configurações de robôs.
+
+As alterações devem aparecer imediatamente no modelo 3D.
+
+## 5. SISTEMA DE PESO
+
+Cada componente possui massa em quilogramas.
+
+O peso total é calculado somando:
+
+Cabeça + torso + pernas + armas + equipamentos + habilidade.
+
+Categorias iniciais:
+
+* Leve: até 2.000 kg.
+* Médio: 2.001 a 5.000 kg.
+* Pesado: acima de 5.000 kg.
+
+O peso influencia:
+
+* Aceleração.
+* Velocidade máxima.
+* Frenagem.
+* Rotação.
+* Altura do salto.
+* Distância do dash.
+* Consumo de energia.
+* Resistência ao empurrão.
+
+Cada conjunto de pernas possui capacidade máxima de carga.
+
+Permita sobrecarga moderada até 120%, aplicando penalidades progressivas. Acima disso, impeça o robô de entrar em partidas.
+
+Evite que o jogador consiga criar combinações excessivamente rápidas e resistentes.
+
+## 6. MOVIMENTAÇÃO
+
+O estilo escolhido é **BALANCED**.
+
+A movimentação precisa ser responsiva, mas transmitir a massa do robô.
+
+Implemente:
+
+* Caminhada.
+* Corrida.
+* Aceleração.
+* Frenagem.
+* Saltos.
+* Dash.
+* Movimentação lateral.
+* Rotação do torso.
+* Mira independente.
+* Recuo das armas.
+* Reações aos impactos.
+
+A câmera será em terceira pessoa, com controle pelo mouse.
+
+A movimentação deve ser agradável antes de adicionar sistemas complexos.
+
+## 7. ARMAS
+
+Implemente seis armas:
+
+1. Metralhadora.
+2. Canhão laser.
+3. Espada de energia.
+4. Lançador de mísseis.
+5. Escopeta.
+6. Martelo mecânico.
+
+Cada arma deve possuir:
+
+* Dano.
+* Cadência.
+* Alcance.
+* Peso.
+* Consumo de energia ou munição.
+* Recuo.
+* Efeitos visuais.
+* Efeitos sonoros.
+* Animações.
+* Tempo de recuperação.
+
+Crie sistemas de projéteis, hitscan quando apropriado e detecção de colisão.
+
+Os valores iniciais devem ser configuráveis e ajustados por testes de balanceamento.
+
+## 8. DESTRUIÇÃO PARCIAL
+
+O sistema escolhido é **DESTRUIÇÃO PARCIAL**.
+
+As peças estruturais principais não devem se soltar completamente.
+
+Implemente:
+
+* Blindagem danificável.
+* Rachaduras.
+* Painéis destruíveis.
+* Fragmentos visuais.
+* Faíscas.
+* Fumaça.
+* Danos localizados.
+* Efeitos de impacto.
+* Animações de instabilidade.
+
+Cabeça, torso, pernas e armas possuem estados de dano.
+
+Danos nas pernas reduzem gradualmente a mobilidade, sem deixar o jogador completamente imóvel.
+
+Danos nas armas podem reduzir a precisão ou causar interrupções temporárias.
+
+Implemente resistência a atordoamentos consecutivos para evitar combinações injustas.
+
+A perda de blindagem não deve aumentar automaticamente a velocidade do robô.
+
+## 9. HABILIDADES SELECIONÁVEIS
+
+Cada robô pode equipar **uma habilidade ativa**.
+
+Habilidades planejadas:
+
+### Energy Shield
+
+Escudo temporário que absorve dano.
+
+### Turbo Dash
+
+Propulsão rápida, influenciada pelo peso.
+
+### Optical Cloak
+
+Camuflagem temporária, interrompida ao atacar.
+
+### EMP Pulse
+
+Pulso eletromagnético que interrompe habilidades inimigas temporariamente.
+
+### Repair Drone
+
+Drone que recupera parte da integridade do robô.
+
+### Seismic Slam
+
+Impacto no solo que empurra inimigos próximos.
+
+### Portable Barrier
+
+Barreira energética posicionável.
+
+### Combat Overdrive
+
+Aumento temporário de dano e cadência, com geração adicional de calor.
+
+Cada habilidade possui:
+
+* Tempo de recarga.
+* Custo de energia.
+* Massa do equipamento.
+* Duração.
+* Efeitos.
+* Limitações de balanceamento.
+
+Não permita combinações claramente dominantes.
+
+Por exemplo, a eficiência da camuflagem deve ser ajustada para robôs muito pesados.
+
+Comece implementando **Turbo Dash e Energy Shield**. Adicione as demais após validar o combate.
+
+## 10. MAPAS
+
+Mapas planejados:
+
+1. Frozen Outpost.
+2. Iron Factory.
+3. Dust Canyon.
+4. Neon District.
+5. Orbital Station.
+6. Overgrown Ruins.
+
+### PRIMEIRO MAPA: FROZEN OUTPOST
+
+Utilize as imagens de referência da base congelada.
+
+Elementos principais:
+
+* Instalação industrial em montanhas nevadas.
+* Plataforma circular central.
+* Quatro acessos principais.
+* Passarelas metálicas.
+* Torres.
+* Contêineres.
+* Rampas.
+* Coberturas para combate.
+* Penhascos.
+* Cachoeiras congeladas.
+* Antenas.
+* Instalações industriais.
+* Iluminação atmosférica.
+
+Construa o mapa com geometria 3D e colisões reais.
+
+Implemente pontos de nascimento, áreas de combate e limites seguros.
+
+Use a imagem aérea como referência principal para o layout.
+
+Priorize rotas equilibradas, cobertura adequada e boa visibilidade.
+
+## 11. MODOS DE JOGO
+
+Planeje:
+
+* Deathmatch.
+* Team Battle 5v5.
+* Core Control.
+* Titan Hunt.
+* Mecha Trials.
+
+Implemente primeiro um modo de treinamento com bots.
+
+Depois desenvolva 1v1 online.
+
+Somente após validar o multiplayer, avance para 5v5.
+
+## 12. MULTIPLAYER
+
+Utilize Colyseus com servidor autoritativo.
+
+O servidor deve validar:
+
+* Posição.
+* Velocidade.
+* Peso.
+* Dano.
+* Disparos.
+* Habilidades.
+* Energia.
+* Cooldowns.
+* Vida.
+* Estados de destruição.
+
+Implemente interpolação para movimentação remota e mecanismos apropriados de predição e reconciliação.
+
+Não confie no cliente para determinar dano ou resultados das partidas.
+
+## 13. INTERFACE
+
+Crie:
+
+* Menu principal.
+* Garagem.
+* Seleção de mapas.
+* Seleção de modos.
+* Configurações.
+* HUD de combate.
+* Indicador de vida.
+* Indicador de energia.
+* Indicador de habilidade.
+* Mira.
+* Placar.
+* Tela de resultados.
+
+Visual futurista, organizado e responsivo.
+
+## 14. DESEMPENHO
+
+Priorize boa performance.
+
+Implemente, quando apropriado:
+
+* Instanciamento de objetos.
+* LOD.
+* Frustum culling.
+* Otimização de materiais.
+* Pooling de partículas e projéteis.
+* Limitação de efeitos caros.
+* Configurações gráficas.
+* Monitoramento de FPS.
+
+Evite sombras e efeitos excessivos que prejudiquem o desempenho.
+
+## 15. ORDEM DE DESENVOLVIMENTO
+
+### FASE 1 — MVP JOGÁVEL
+
+Entregue:
+
+* Projeto Vite + Babylon.js + TypeScript.
+* Frozen Outpost em 3D.
+* Robô Striker.
+* Câmera em terceira pessoa.
+* Movimentação.
+* Colisões.
+* Uma arma funcional.
+* Alvos ou bots básicos.
+* HUD.
+* Comandos de execução.
+
+### FASE 2 — COMBATE
+
+Adicione:
+
+* Seis armas.
+* Dano localizado.
+* Blindagem.
+* Destruição parcial.
+* Energia.
+* Dash.
+* Escudo.
+* Efeitos de combate.
+
+### FASE 3 — PERSONALIZAÇÃO
+
+Adicione:
+
+* Seis famílias.
+* Peças modulares.
+* Garagem.
+* Sistema de peso.
+* Habilidades.
+* Salvamento de configurações.
+
+### FASE 4 — MULTIPLAYER
+
+Adicione:
+
+* Servidor Colyseus.
+* Salas.
+* Sincronização.
+* Partidas 1v1.
+* Validação autoritativa.
+* Reconexão e tratamento de erros.
+
+### FASE 5 — EXPANSÃO
+
+Adicione:
+
+* 5v5.
+* Outros mapas.
+* Modos adicionais.
+* Melhorias gráficas.
+* Sons.
+* Animações.
+* Polimento.
+
+## 16. REGRAS OBRIGATÓRIAS
+
+1. Não entregue apenas descrições.
+2. Crie arquivos reais de código.
+3. Não apresente funcionalidades incompletas como prontas.
+4. Não use imagens 2D para simular robôs 3D.
+5. Não invente resultados de testes.
+6. Execute verificações de compilação sempre que possível.
+7. Corrija erros encontrados.
+8. Mantenha uma arquitetura organizada.
+9. Documente os comandos necessários.
+10. Priorize um jogo divertido e funcional em vez de tentar implementar tudo simultaneamente.
+
+## 17. INSTRUÇÃO FINAL
+
+**COMECE AGORA PELA FASE 1.**
+
+Crie a estrutura do projeto e implemente o Frozen Outpost com um robô Striker controlável, câmera em terceira pessoa, colisões, arma funcional e HUD.
+
+Use as imagens anexadas como referências visuais.
+
+Ao terminar, informe exatamente quais funcionalidades estão implementadas, quais foram testadas e quais ainda precisam ser desenvolvidas.
+
+O objetivo é transformar MECHA MAYHEM em um jogo 3D real, jogável e progressivamente expansível.

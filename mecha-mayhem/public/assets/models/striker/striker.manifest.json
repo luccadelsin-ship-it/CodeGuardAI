@@ -1,0 +1,38 @@
+{
+  "name": "Striker",
+  "units": "meters",
+  "up": "+Y",
+  "forward": "+Z",
+  "origin": "center between feet, on floor",
+  "height": 3.62,
+  "full": "/assets/models/striker/striker_full.glb",
+  "parts": {
+    "head": "/assets/models/striker/striker_head.glb",
+    "torso_arms": "/assets/models/striker/striker_torso_arms.glb",
+    "legs": "/assets/models/striker/striker_legs.glb",
+    "weapon": "/assets/models/striker/striker_weapon.glb"
+  },
+  "mounts": {
+    "head": {
+      "x": 0,
+      "y": 3.05,
+      "z": 0
+    },
+    "waist": {
+      "x": 0,
+      "y": 1.82,
+      "z": 0
+    },
+    "weapon": {
+      "x": 1.01,
+      "y": 1.91,
+      "z": 0.16
+    },
+    "muzzle": {
+      "x": 1.01,
+      "y": 1.9,
+      "z": 1.55
+    }
+  },
+  "note": "Static geometry; use TransformNodes for head aim/torso turn or later rigging."
+}

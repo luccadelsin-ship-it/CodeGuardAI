@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#07101b" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <title>Mecha Mayhem — Frozen Outpost</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="game-canvas" aria-label="Arena 3D Frozen Outpost"></canvas>
+      <div id="vignette"></div>
+
+      <section id="loading" class="screen loading-screen" aria-live="polite">
+        <div class="loading-top"><span>MM // SISTEMAS DE COMBATE</span><span>EST. 2149</span></div>
+        <div class="loading-core">
+          <div class="load-mark"><div class="load-ring ring-outer"></div><div class="load-ring ring-inner"></div><span>MM</span></div>
+          <p class="eyebrow">INICIALIZAÇÃO DO SISTEMA</p>
+          <h1>PREPARE-SE<br /><em>PARA O IMPACTO</em></h1>
+          <div class="loading-meter"><div id="loading-fill"></div></div>
+          <div class="loading-meta"><span id="loading-label">Carregando...</span><strong id="loading-percent">0%</strong></div>
+        </div>
+        <div class="loading-bottom"><span>FROZEN OUTPOST / SETOR 01</span><span>ESTABELECENDO CONEXÃO COM A ARENA</span></div>
+      </section>
+
+      <section id="menu" class="screen menu-screen hidden">
+        <header class="menu-header"><span class="brand-mini"><span class="brand-icon">✦</span> MECHA MAYHEM</span><span class="header-status"><i></i> SISTEMAS OPERACIONAIS <b>·</b> V 0.1</span></header>
+        <div class="menu-layout">
+          <div class="menu-main">
+            <div class="menu-kicker"><span>01 / 06</span><span class="kicker-line"></span><span>PROTOCOLO DE COMBATE</span></div>
+            <h1 class="game-title"><span>MECHA</span><span>MAYHEM</span></h1>
+            <p class="menu-subtitle">CONSTRUA A MÁQUINA. DOMINE A ARENA.</p>
+            <div class="menu-actions">
+              <button id="start-button" class="primary-action"><span class="action-icon">▶</span><span><small>INICIAR MISSÃO</small><strong>TREINAMENTO</strong></span><span class="action-arrow">↗</span></button>
+              <button id="garage-button" class="secondary-action"><span class="action-number">02</span><span>OFICINA / STRIKER</span><span>↗</span></button>
+              <button id="settings-button" class="secondary-action"><span class="action-number">03</span><span>CONFIGURAÇÕES</span><span>↗</span></button>
+              <button id="credits-button-mobile" class="secondary-action mobile-credits"><span class="action-number">04</span><span>CRÉDITOS DOS MODELOS</span><span>↗</span></button>
+            </div>
+          </div>
+          <aside class="menu-intel">
+            <div class="intel-header"><span class="corner-glyph">◈</span><span>PRÓXIMA OPERAÇÃO</span><span>01 / 01</span></div>
+            <div class="intel-map-art"><div class="map-grid"></div><span class="map-crosshair">⌖</span><span class="map-tag">SETOR ÁRTICO 01</span></div>
+            <div class="intel-body"><span class="eyebrow">CAMPO DE TREINAMENTO</span><h2>FROZEN<br />OUTPOST</h2><p>Instalação industrial isolada entre penhascos congelados. Elimine os drones de treinamento e mantenha o núcleo seguro.</p><div class="intel-stats"><span>TIPO <b>TREINO SOLO</b></span><span>ALVOS <b>3 DRONES</b></span></div></div>
+          </aside>
+        </div>
+        <footer class="menu-footer"><span>W A S D · MOVER &nbsp;&nbsp; MOUSE · MIRAR &nbsp;&nbsp; CLIQUE · ATIRAR</span><span><button id="credits-button" class="footer-button">CRÉDITOS DOS MODELOS ↗</button> &nbsp;&nbsp; FROZEN OUTPOST <b>◉</b> ONLINE LOCAL</span></footer>
+      </section>
+
+      <section id="garage" class="screen panel-screen hidden">
+        <header class="panel-header"><button class="back-button" data-back>← VOLTAR</button><span>OFICINA // STRIKER-01</span><span>SELEÇÃO DE ACABAMENTO</span></header>
+        <div class="garage-panel"><span class="eyebrow">PLATAFORMA MODULAR / FASE 1</span><h2>SEU STRIKER.<br /><em>SUA ASSINATURA.</em></h2><p>Escolha a cor da blindagem. O acabamento aparece no modelo em tempo real e é salvo neste navegador.</p><div class="swatches"><button class="swatch active" data-color="arctic" style="--swatch:#d9e9f4" aria-label="Branco ártico"><span></span>ÁRTICO</button><button class="swatch" data-color="ember" style="--swatch:#ec702f" aria-label="Laranja"><span></span>EMBER</button><button class="swatch" data-color="phantom" style="--swatch:#7455b9" aria-label="Roxo"><span></span>PHANTOM</button><button class="swatch" data-color="steel" style="--swatch:#8c9aa7" aria-label="Cinza aço"><span></span>STEEL</button></div><div class="garage-detail"><span>CHASSI</span><strong>STRIKER</strong><span>ARMA</span><strong>METRALHADORA MK I</strong></div><button id="garage-play" class="primary-action compact"><span class="action-icon">▶</span><span><small>CHASSI PRONTO</small><strong>ENTRAR NO TREINO</strong></span><span class="action-arrow">↗</span></button></div>
+        <div class="garage-caption">ARRASTE PARA GIRAR · SCROLL PARA APROXIMAR</div>
+      </section>
+
+      <section id="settings" class="screen panel-screen hidden">
+        <header class="panel-header"><button class="back-button" data-back>← VOLTAR</button><span>CONFIGURAÇÕES // SISTEMA</span><span>V 0.1</span></header>
+        <div class="settings-panel"><span class="eyebrow">AJUSTES DE COMBATE</span><h2>CONFIGURAÇÕES</h2><label class="setting-row"><span><strong>SENSIBILIDADE DO MOUSE</strong><small>Velocidade de rotação da câmera</small></span><span><input id="sensitivity" type="range" min="0.4" max="2" step="0.1" value="1" /><b id="sensitivity-value">1.0×</b></span></label><label class="setting-row"><span><strong>QUALIDADE GRÁFICA</strong><small>Escala de renderização e sombras</small></span><select id="quality"><option value="high">Alta</option><option value="medium">Média</option><option value="low">Baixa</option></select></label><label class="setting-row"><span><strong>EFEITOS SONOROS</strong><small>Disparos, impactos e interface</small></span><input id="sound" type="checkbox" checked /></label><div class="settings-controls"><strong>CONTROLES</strong><p>W A S D mover · Shift correr · Espaço saltar · Q dash · E escudo · Mouse mirar · Clique esquerdo disparar · Esc pausar</p></div></div>
+      </section>
+
+      <section id="credits" class="screen panel-screen credits-screen hidden">
+        <header class="panel-header"><button class="back-button" data-back>← VOLTAR</button><span>CRÉDITOS // MODELOS 3D</span><span>CC BY 4.0</span></header>
+        <div class="credits-panel"><span class="eyebrow">ASSETS DE AMBIENTE</span><h2>CRÉDITOS</h2><p>Modelos do Sketchfab, adaptados no Blender para escala e pontos de origem do jogo. Licença Creative Commons Atribuição 4.0.</p><div id="credits-list" class="credits-list"></div><p class="credits-note">Frozen Outpost e Striker: criados para este projeto no Blender e em geometria Babylon.js.</p></div>
+      </section>
+
+      <div id="hud" class="hud hidden">
+        <div class="hud-top-left"><span class="hud-overline">MISSÃO 01 / TREINAMENTO</span><strong>FROZEN OUTPOST</strong><span id="objective">ELIMINE OS DRONES · 0 / 3</span></div>
+        <div class="hud-top-right"><span>STRIKER-01</span><strong id="score">0000</strong><small id="fps">-- FPS</small></div>
+        <div id="crosshair" class="crosshair"><span></span><span></span><span></span><span></span></div>
+        <div id="hitmarker" class="hitmarker hidden">✕</div>
+        <div id="damage-flash"></div>
+        <div class="hud-bottom-left"><div class="hud-value"><span>INTEGRIDADE</span><strong id="health-number">100</strong><small>%</small></div><div class="gauge health"><div id="health-fill"></div></div><div class="hud-value energy-label"><span>ENERGIA</span><strong id="energy-number">100</strong><small>%</small></div><div class="gauge energy"><div id="energy-fill"></div></div></div>
+        <div class="hud-bottom-right"><div class="ability" id="dash-ability"><span>Q</span><div><strong>TURBO DASH</strong><small id="dash-status">PRONTO</small></div></div><div class="ability" id="shield-ability"><span>E</span><div><strong>ENERGY SHIELD</strong><small id="shield-status">PRONTO</small></div></div><div class="weapon"><span>ARMA ATIVA</span><strong>METRALHADORA <i>MK I</i></strong><div class="weapon-heat"><div id="heat-fill"></div></div><small id="heat-label">CALOR 0%</small></div></div>
+        <div id="controls-tip" class="controls-tip">CLIQUE PARA TRAVAR A MIRA <span>·</span> ESC PARA PAUSAR</div>
+      </div>
+
+      <section id="pause" class="screen modal-screen hidden"><div class="modal-box"><span class="eyebrow">SISTEMA EM ESPERA</span><h2>PAUSADO</h2><button id="resume-button" class="primary-action compact"><span class="action-icon">▶</span><span><small>VOLTAR À ARENA</small><strong>CONTINUAR</strong></span><span class="action-arrow">↗</span></button><button id="pause-menu-button" class="secondary-action"><span class="action-number">↩</span><span>MENU PRINCIPAL</span><span>↗</span></button></div></section>
+      <section id="result" class="screen modal-screen hidden"><div class="modal-box"><span class="eyebrow" id="result-kicker">TREINAMENTO CONCLUÍDO</span><h2 id="result-title">VITÓRIA</h2><p id="result-detail">Os drones foram eliminados.</p><button id="retry-button" class="primary-action compact"><span class="action-icon">▶</span><span><small>REINICIAR SIMULAÇÃO</small><strong>JOGAR DE NOVO</strong></span><span class="action-arrow">↗</span></button><button id="result-menu-button" class="secondary-action"><span class="action-number">↩</span><span>MENU PRINCIPAL</span><span>↗</span></button></div></section>
+      <div id="toast" class="toast hidden"></div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
