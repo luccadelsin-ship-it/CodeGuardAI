@@ -145,6 +145,12 @@ check('peças: atributos aplicados na simulação compartilhada', runner.z > tan
 const swap = createMechState(0, arena.deckY, 0, 0, 'mg');
 switchWeapon(swap, 'hammer');
 check('peças: peso da arma entra na carga', swap.loadout.legsLoad > createMechState(0, arena.deckY, 0, 0, 'mg').loadout.legsLoad);
+const padArena = createArena(refineryLayout, { mapId: 'refinery' });
+const pad = padArena.jumpPads[0];
+const jumper = createMechState(pad.x, padArena.deckY, pad.z, 0);
+for (let i = 0; i < 12; i++) stepMech(jumper, { mx: 0, mz: 0, yaw: 0, pitch: 0, sprint: false, jump: false, dash: false, shield: false }, 1 / 30, padArena);
+check('mapas: plataforma de salto lança o mecha (regra compartilhada)', jumper.y > padArena.deckY + 2 && padArena.jumpPads.length === 4, `altura ${(jumper.y - padArena.deckY).toFixed(1)} m`);
+check('mapas: pontes dos mapas procedurais têm cobertura', padArena.builtCover.filter((c) => c.kind === 'block').length === refineryLayout.bridges.length);
 check('mapas: cada arena tem coberturas centrais próprias', new Set(Object.values(MAP_COVER).map((c) => JSON.stringify(c))).size === 4);
 const refinery = createArena(refineryLayout);
 check('segundo mapa: layout de refinaria tem pontes e coberturas', refinery.layout.visualAsset === 'procedural:refinery' && refinery.layout.bridges.length === 4 && refinery.staticCover.length > 8);
@@ -166,6 +172,12 @@ try {
   await page.locator('#menu').waitFor({ state: 'visible', timeout: 120000 });
   await game(page, () => window.__mecha.setQuality('low'));
   await page.screenshot({ path: `${out}/menu.png` });
+  await page.locator('#settings-button').click();
+  await page.locator('#quality').selectOption('minimal');
+  check('qualidade Mínima (sem placa de vídeo) disponível e salva', await page.evaluate(() => localStorage.getItem('mecha-mayhem:quality')) === 'minimal');
+  await page.locator('#quality').selectOption('auto');
+  await page.locator('#settings [data-back]').click();
+  await game(page, () => window.__mecha.setQuality('low'));
   check('treino: dificuldade inicial Recruta', await game(page, () => window.__mecha.difficulty) === 'recruit');
   await page.locator('#lobby-button').click();
   await page.locator('#lobby').waitFor({ state: 'visible' });

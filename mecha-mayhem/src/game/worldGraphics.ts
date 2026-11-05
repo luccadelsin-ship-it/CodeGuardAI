@@ -97,7 +97,7 @@ export function createWorldGraphics(scene: Scene, layout: ArenaLayout, mapId: Ma
 
   return {
     setTheme(top: string, horizon: string, color: [number, number, number]) { updateEnvironment(top, horizon, color); accent.emissiveColor = new Color3(...color).scale(.22); },
-    setQuality(quality: 'high' | 'medium' | 'low') { for (let i = 0; i < optional.length; i++) optional[i].setEnabled(quality === 'high' || (quality === 'medium' && i % 2 === 0)); panel.anisotropicFilteringLevel = quality === 'high' ? 8 : 2; },
+    setQuality(quality: 'high' | 'medium' | 'low' | 'minimal') { for (let i = 0; i < optional.length; i++) optional[i].setEnabled(quality === 'high' || (quality === 'medium' && i % 2 === 0)); panel.anisotropicFilteringLevel = quality === 'high' ? 8 : 2; },
     dispose() { for (const mesh of meshes) mesh.dispose(); for (const mat of materials) mat.dispose(); for (const texture of textures) texture.dispose(); reflection.dispose(); if (scene.environmentTexture === reflection) scene.environmentTexture = null; },
   };
 }

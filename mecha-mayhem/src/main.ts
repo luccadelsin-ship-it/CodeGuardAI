@@ -61,6 +61,22 @@ function show(screen: UiScreen): void {
   } else el('rotate-hint').classList.add('hidden');
 }
 
+type GraphicsLevel = 'high' | 'medium' | 'low' | 'minimal';
+let autoLevel: GraphicsLevel | null = null;
+let lowFps = 0;
+let softwareRenderer = false;
+
+/** True when WebGL runs on the CPU (SwiftShader, llvmpipe, Microsoft Basic Render): no usable graphics card. */
+function detectSoftwareRenderer(): boolean {
+  try {
+    const gl = document.createElement('canvas').getContext('webgl');
+    if (!gl) return true;
+    const info = gl.getExtension('WEBGL_debug_renderer_info');
+    const renderer = String(info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+    return /swiftshader|llvmpipe|softpipe|software|basic render/i.test(renderer);
+  } catch { return false; }
+}
+
 function saveSetting(key: string, value: string): void {
   try { localStorage.setItem(`mecha-mayhem:${key}`, value); } catch { /* Storage can be unavailable in private mode. */ }
 }
@@ -587,10 +603,27 @@ function bindUI(): void {
   sensitivity.addEventListener('input', applySensitivity);
   applySensitivity();
   const quality = el<HTMLSelectElement>('quality');
-  quality.value = loadSetting('quality', isTouchDevice() ? 'medium' : 'high');
-  const applyQuality = () => { game.setQuality(quality.value as 'high' | 'medium' | 'low'); saveSetting('quality', quality.value); };
+  quality.value = loadSetting('quality', 'auto');
+  const applyQuality = () => {
+    saveSetting('quality', quality.value);
+    autoLevel = quality.value === 'auto' ? (softwareRenderer ? 'minimal' : isTouchDevice() ? 'medium' : 'high') : null;
+    game.setQuality((autoLevel ?? quality.value) as GraphicsLevel);
+  };
   quality.addEventListener('change', applyQuality);
   applyQuality();
+  if (softwareRenderer && quality.value === 'auto') toast('SEM PLACA DE VÍDEO DETECTADA · QUALIDADE MÍNIMA ATIVADA');
+  // Automatic mode also steps down when the frame rate stays low during combat.
+  window.setInterval(() => {
+    if (!autoLevel || currentScreen !== 'game') return;
+    lowFps = game.fps() < 22 ? lowFps + 1 : 0;
+    const order: GraphicsLevel[] = ['high', 'medium', 'low', 'minimal'];
+    if (lowFps >= 5 && autoLevel !== 'minimal') {
+      autoLevel = order[order.indexOf(autoLevel) + 1];
+      game.setQuality(autoLevel);
+      lowFps = 0;
+      toast(`DESEMPENHO BAIXO · QUALIDADE ${autoLevel === 'minimal' ? 'MÍNIMA' : autoLevel === 'low' ? 'BAIXA' : 'MÉDIA'}`);
+    }
+  }, 1000);
   const sound = el<HTMLInputElement>('sound');
   sound.checked = loadSetting('sound', 'true') === 'true';
   const applySound = () => { game.setSound(sound.checked); saveSetting('sound', String(sound.checked)); };
@@ -625,6 +658,7 @@ async function loadCredits(): Promise<void> {
 
 async function bootstrap(): Promise<void> {
   progress(5, 'Preparando renderizador WebGL');
+  softwareRenderer = detectSoftwareRenderer();
   const engine = new Engine(canvas, true, { stencil: true, preserveDrawingBuffer: false, adaptToDeviceRatio: false });
   const scene = new Scene(engine);
   scene.collisionsEnabled = true;

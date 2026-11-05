@@ -22,6 +22,14 @@ Jogo 3D de batalha de robôs no navegador, feito com **Babylon.js**, **TypeScrip
 - **30 GLBs no Triverse** não foram gerados: não há `TRIVERSE_API_KEY` nem acesso à conta neste ambiente. Plano e comandos em `docs/TRIVERSE_30_PARTS_PLAN.json`. O robô em jogo usa as peças procedurais (silhueta + cores + detalhes de cada família).
 - Gráficos: revisados por capturas (sem erros); não houve nova passada de materiais/iluminação além das peças de mapa. FPS em GPU real e jogo pela internet não foram testados.
 
+## Sempre no ar, atualização automática e PC sem placa de vídeo
+
+- `npm run live`: sobe o jogo + servidor online em http://localhost:5173/ e **reinicia sozinho** se cair (log em `artifacts/live.log`). O navegador recarrega a cada alteração no código do jogo; mudanças em `server/` ou `src/shared/` reiniciam o servidor online automaticamente.
+- **Qualidade Automática** (padrão): detecta WebGL por software (SwiftShader, llvmpipe, "Microsoft Basic Render") e ativa a qualidade **Mínima** (meia resolução, sem sombras, brilho, pós-processamento, neblina e neve). Em combate, se o FPS ficar abaixo de 22 por 5 s, baixa um nível sozinho.
+- Medido neste ambiente sem GPU (SwiftShader, Doca Neon, 1280×720): **1,9 FPS na Alta → 11,4 FPS na Mínima**. Num PC real sem placa dedicada (gráfico integrado) o resultado tende a ser melhor, mas não foi medido.
+- Mapas: plataformas de salto em quatro estações de cada arena (lançam ~3,8 m; regra compartilhada, vale no online) e coberturas nas pontes da Refinaria, Doca Neon e Cânion.
+- Smoke: **66/66** checks, sem erros de console.
+
 ## Executar
 
 Requer Node.js 22.18 ou mais novo (o servidor roda TypeScript direto pelo Node).

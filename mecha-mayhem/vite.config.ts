@@ -17,6 +17,17 @@ function mechaOnline(): Plugin {
     name: 'mecha-mayhem-online',
     configureServer(server) {
       const game = attach(server.httpServer as import('node:http').Server | null);
+      // Live update: the browser hot-reloads client code; changes to the authoritative
+      // server or shared rules restart the dev server so the online game picks them up too.
+      let restarting = false;
+      server.watcher.add(['server/**/*.ts', 'src/shared/**/*.ts']);
+      server.watcher.on('change', (file) => {
+        const norm = file.replace(/\\/g, '/');
+        if (restarting || !(/\/server\/[^/]+\.ts$/.test(norm) || /\/src\/shared\//.test(norm))) return;
+        restarting = true;
+        server.config.logger.info(`[mecha] ${norm.split('/').slice(-2).join('/')} mudou · reiniciando servidor online`, { timestamp: true });
+        void server.restart().finally(() => { restarting = false; });
+      });
       // Dev-only read-only room status for the smoke test (bots, teams, core).
       server.middlewares.use('/__mm/rooms', (_req, res) => {
         const rooms = game ? [...game.rooms.values()].map((r) => ({ code: r.code, mode: r.mode, phase: r.phase, humans: r.humans, players: r.players.size, bots: r.botStatus(), outcome: r.outcome() })) : [];

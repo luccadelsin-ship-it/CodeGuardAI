@@ -20,7 +20,7 @@ import {
   Vector3,
 } from '@babylonjs/core';
 import '@babylonjs/loaders/glTF';
-import { MAP_COVER, createArena, type Arena, type ArenaLayout, type Cover } from '../shared/arena';
+import { createArena, type Arena, type ArenaLayout, type Cover } from '../shared/arena';
 import { flareTexture } from './fx';
 import { MAPS, type MapId } from '../shared/maps';
 import { createWorldGraphics } from './worldGraphics';
@@ -84,7 +84,7 @@ export type World = {
   destroyBarrel(barrel: Barrel): void;
   createSupplyCrate(): TransformNode;
   setTheme(theme: ThemeId): void;
-  setQuality(quality: 'high' | 'medium' | 'low'): void;
+  setQuality(quality: 'high' | 'medium' | 'low' | 'minimal'): void;
   update(dt: number, time: number, cameraPosition: Vector3): void;
   dispose(): void;
 };
@@ -259,7 +259,7 @@ export async function createWorld(scene: Scene, onProgress?: (label: string) => 
   const hazard = material(scene, 'barricade-hazard', '#e8722f', false, 0.2);
   const strip = material(scene, 'barricade-strip', '#61e8ff', true);
   const accentMaterials: StandardMaterial[] = [strip];
-  for (const [i, c] of MAP_COVER[mapId].entries()) {
+  for (const [i, c] of arena.builtCover.entries()) {
     const root = new TransformNode(`cover-visual-${i}`, scene);
     root.position.set(c.x, deckY, c.z);
     const alongX = c.widthX >= c.widthZ;
@@ -363,6 +363,24 @@ export async function createWorld(scene: Scene, onProgress?: (label: string) => 
       add(top, hazard);
     }
     props.push(root);
+  }
+
+  // Jump pads: glowing launch discs with chevrons (shared rule in arena.padAt / stepMech).
+  const padRings: Mesh[] = [];
+  for (const [i, pad] of arena.jumpPads.entries()) {
+    const base = MeshBuilder.CreateCylinder(`jump-pad-${i}`, { diameter: pad.radius * 2.2, height: 0.12, tessellation: 28 }, scene);
+    base.position.set(pad.x, deckY + 0.06, pad.z);
+    base.material = plate; base.isPickable = false; base.receiveShadows = true; ownedMeshes.push(base);
+    const core = MeshBuilder.CreateDisc(`jump-pad-core-${i}`, { radius: pad.radius * 0.8, tessellation: 28 }, scene);
+    core.rotation.x = Math.PI / 2; core.position.set(pad.x, deckY + 0.13, pad.z);
+    core.material = strip; core.isPickable = false; ownedMeshes.push(core);
+    for (let k = 0; k < 2; k++) {
+      const ring = MeshBuilder.CreateTorus(`jump-pad-ring-${i}-${k}`, { diameter: pad.radius * 1.6, thickness: 0.06, tessellation: 28 }, scene);
+      ring.position.set(pad.x, deckY + 0.2, pad.z);
+      ring.material = strip; ring.isPickable = false; ownedMeshes.push(ring);
+      ring.metadata = { phase: k * 0.5 };
+      padRings.push(ring);
+    }
   }
 
   // Beacon pylons on the ring edge pulse in the theme accent colour.
@@ -511,7 +529,7 @@ export async function createWorld(scene: Scene, onProgress?: (label: string) => 
   snow.start();
 
   let theme: ThemeId = 'day';
-  let quality: 'high' | 'medium' | 'low' = 'high';
+  let quality: 'high' | 'medium' | 'low' | 'minimal' = 'high';
   let preset = PRESETS.day;
 
   function applyTheme(id: ThemeId) {
@@ -542,7 +560,7 @@ export async function createWorld(scene: Scene, onProgress?: (label: string) => 
   }
 
   function applySnow() {
-    const scale = quality === 'high' ? 1 : quality === 'medium' ? 0.55 : 0.2;
+    const scale = quality === 'high' ? 1 : quality === 'medium' ? 0.55 : quality === 'low' ? 0.2 : 0;
     snow.emitRate = preset.snow * scale;
     snow.direction1 = new Vector3(preset.wind[0] * 0.7, -2.2, preset.wind[1] * 0.7);
     snow.direction2 = new Vector3(preset.wind[0] * 1.3, -3.6, preset.wind[1] * 1.3);
@@ -597,7 +615,7 @@ export async function createWorld(scene: Scene, onProgress?: (label: string) => 
     setTheme(id) { applyTheme(id); },
     setQuality(next) {
       quality = next;
-      shadows.mapSize = next === 'high' ? 2048 : 1024;
+      shadows.mapSize = next === 'high' ? 2048 : next === 'minimal' ? 512 : 1024;
       shadows.filteringQuality = next === 'high' ? ShadowGenerator.QUALITY_MEDIUM : ShadowGenerator.QUALITY_LOW;
       graphics.setQuality(next);
       applySnow();
@@ -605,6 +623,12 @@ export async function createWorld(scene: Scene, onProgress?: (label: string) => 
     update(dt, time, cameraPosition) {
       snowOrigin.set(cameraPosition.x, Math.max(deckY, cameraPosition.y - 6), cameraPosition.z);
       const pulse = 0.55 + 0.45 * Math.sin(time * 2.4);
+      for (const ring of padRings) {
+        const t = (time * 0.9 + (ring.metadata?.phase ?? 0)) % 1;
+        ring.position.y = deckY + 0.2 + t * 2.4;
+        ring.scaling.setAll(1 - t * 0.45);
+        ring.visibility = 1 - t;
+      }
       for (const [i, beacon] of beacons.entries()) beacon.scaling.setAll(0.75 + 0.35 * Math.max(0, Math.sin(time * 3 + i * 1.57)));
       strip.emissiveColor = new Color3(...preset.accent).scale(0.65 + pulse * 0.35);
       if (preset.aurora > 0) auroraTex.uOffset = (auroraTex.uOffset + dt * 0.006) % 1;

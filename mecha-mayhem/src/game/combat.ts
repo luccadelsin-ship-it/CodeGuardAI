@@ -293,11 +293,26 @@ export class CombatGame {
     this.setWeapon(WEAPON_ORDER[(index + direction + WEAPON_ORDER.length) % WEAPON_ORDER.length]);
   }
 
-  setQuality(quality: 'high' | 'medium' | 'low'): void {
-    const targetPixelRatio = quality === 'high' ? Math.min(window.devicePixelRatio, 1.5) : quality === 'medium' ? 1 : 0.7;
+  fps(): number { return this.engine.getFps(); }
+
+  /**
+   * 'minimal' is for computers without a graphics card (software WebGL): half
+   * resolution, no shadows, glow, bloom or post-processing, no snow, few particles.
+   */
+  setQuality(quality: 'high' | 'medium' | 'low' | 'minimal'): void {
+    const targetPixelRatio = quality === 'high' ? Math.min(window.devicePixelRatio, 1.5) : quality === 'medium' ? 1 : quality === 'low' ? 0.7 : 0.4;
     this.engine.setHardwareScalingLevel(window.devicePixelRatio / targetPixelRatio);
-    this.scene.shadowsEnabled = quality !== 'low';
-    this.glow.isEnabled = quality !== 'low';
+    this.scene.shadowsEnabled = quality === 'high' || quality === 'medium';
+    this.glow.isEnabled = quality === 'high' || quality === 'medium';
+    // Software rendering: skip per-frame work that a CPU renderer pays dearly for.
+    this.scene.skipPointerMovePicking = true;
+    this.scene.fogEnabled = quality !== 'minimal';
+    this.scene.lightsEnabled = true;
+    this.scene.texturesEnabled = true;
+    for (const light of this.scene.lights) if (light.name === 'fx-flash') light.setEnabled(quality !== 'minimal');
+    const manager = this.scene.postProcessRenderPipelineManager;
+    if (quality === 'minimal') manager.detachCamerasFromRenderPipeline(this.pipeline.name, this.camera);
+    else if (!this.pipeline.cameras.includes(this.camera)) manager.attachCamerasToRenderPipeline(this.pipeline.name, this.camera);
     this.glow.intensity = quality === 'high' ? 0.38 : 0.26;
     this.pipeline.samples = quality === 'high' ? Math.min(4, Math.max(1, this.engine.getCaps().maxMSAASamples)) : 1;
     this.pipeline.bloomEnabled = quality === 'high';
@@ -586,6 +601,7 @@ export class CombatGame {
     const events = stepMech(s, input, dt, this.world.arena);
     this.online?.afterLocalStep(input, dt);
     if (events.jumped) this.sfx.jump();
+    if (events.pad) { this.sfx.dash(); this.fx.shockwave(new Vector3(s.x, s.y + 0.1, s.z), 2.2, [0.4, 0.9, 1], 0.35, 0.1); this.fovKick = Math.max(this.fovKick, 0.08); }
     if (events.landed) { this.player.land(events.landed); this.sfx.land(events.landed / 4); if (events.landed > 9) this.fx.shockwave(new Vector3(s.x, s.y + 0.1, s.z), 2.4, [0.8, 0.9, 1], 0.35, 0.08); this.fx.shake(Math.min(0.2, events.landed * 0.012)); }
     if (events.dashed) { this.sfx.dash(); this.fx.shake(0.12); this.fovKick = 0.12; this.dashTrail(); }
     if (events.shield) { this.sfx.shield(); this.onToast?.('ESCUDO DE ENERGIA ATIVO'); }

@@ -66,7 +66,7 @@ function color4(rgb: Rgb, a = 1): Color4 { return new Color4(rgb[0], rgb[1], rgb
 /** Pooled particle bursts, beams, tracers, debris, explosions and camera trauma. */
 export class Fx {
   trauma = 0;
-  quality: 'high' | 'medium' | 'low' = 'high';
+  quality: 'high' | 'medium' | 'low' | 'minimal' = 'high';
   private readonly timed: Timed[] = [];
   private readonly debris: Debris[] = [];
   private readonly sparkPool: ParticleSystem[] = [];
@@ -156,10 +156,10 @@ export class Fx {
     this.flashLight.range = 18;
   }
 
-  setQuality(quality: 'high' | 'medium' | 'low'): void { this.quality = quality; }
+  setQuality(quality: 'high' | 'medium' | 'low' | 'minimal'): void { this.quality = quality; }
 
   private scaleCount(count: number): number {
-    return Math.max(1, Math.round(count * (this.quality === 'high' ? 1 : this.quality === 'medium' ? 0.65 : 0.35)));
+    return Math.max(1, Math.round(count * (this.quality === 'high' ? 1 : this.quality === 'medium' ? 0.65 : this.quality === 'low' ? 0.35 : 0.2)));
   }
 
   shake(amount: number): void { this.trauma = Math.min(1, this.trauma + amount); }

@@ -81,8 +81,29 @@ export const MAP_COVER: Record<ArenaMapId, Cover[]> = {
   ],
 };
 
+export interface JumpPad { x: number; z: number; radius: number; power: number }
+
+/** Low cover blocks on each bridge, alternating sides, for maps without bridge cover. */
+function bridgeBlocks(layout: ArenaLayout): Cover[] {
+  return layout.bridges.map((b, i) => {
+    const alongX = b.widthX > b.widthZ;
+    const side = (i % 2 ? 1 : -1) * (Math.min(b.widthX, b.widthZ) * 0.24);
+    return { x: alongX ? b.x : b.x + side, z: alongX ? b.z + side : b.z, widthX: 1.2, widthZ: 1.2, height: 1.1, kind: 'block' as const };
+  });
+}
+
+/** Launch pads on the inner edge of four stations: a fast vertical route onto cover tops and over lanes. */
+function jumpPadsFor(layout: ArenaLayout): JumpPad[] {
+  return layout.stations.slice(0, 4).map((s) => ({ x: s.x * 0.83, z: s.z * 0.83, radius: 1.1, power: 14.5 }));
+}
+
 export interface Arena {
   layout: ArenaLayout;
+  /** Procedural cover added on top of the layout (barricades, pillars, bridge blocks...). */
+  builtCover: Cover[];
+  jumpPads: JumpPad[];
+  /** Launch pad under a footprint, if any. */
+  padAt(x: number, z: number): JumpPad | null;
   deckY: number;
   /** Static cover, including the layout blocks, props and procedural barricades. */
   staticCover: Cover[];
@@ -132,10 +153,13 @@ function rayBox(origin: Vec3, dir: Vec3, maxDistance: number, deckY: number, cov
 
 export function createArena(layout: ArenaLayout, options: { builtCover?: boolean; mapId?: ArenaMapId } = {}): Arena {
   const deckY = layout.deckTopY;
+  const mapId = options.mapId ?? 'frozen';
+  const builtCover: Cover[] = options.builtCover === false ? [] : [...(MAP_COVER[mapId] ?? BUILT_COVER), ...(mapId === 'frozen' ? [] : bridgeBlocks(layout))];
+  const jumpPads = jumpPadsFor(layout);
   const staticCover: Cover[] = [
     ...layout.cover.map((cover) => ({ ...cover, kind: 'layout' as const })),
     ...PROP_COVER,
-    ...(options.builtCover === false ? [] : MAP_COVER[options.mapId ?? 'frozen'] ?? BUILT_COVER),
+    ...builtCover,
   ];
   const dynamicCover: Cover[] = [];
   const allCover = () => staticCover.concat(dynamicCover);
@@ -161,6 +185,11 @@ export function createArena(layout: ArenaLayout, options: { builtCover?: boolean
   }
 
   const arena: Arena = {
+    builtCover,
+    jumpPads,
+    padAt(x, z) {
+      return jumpPads.find((p) => (x - p.x) ** 2 + (z - p.z) ** 2 <= p.radius ** 2) ?? null;
+    },
     layout,
     deckY,
     staticCover,

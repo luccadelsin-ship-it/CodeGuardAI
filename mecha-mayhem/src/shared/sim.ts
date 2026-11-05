@@ -85,6 +85,8 @@ export interface SimEvents {
   dashed?: boolean;
   shield?: boolean;
   jetStart?: boolean;
+  /** Launched by a jump pad. */
+  pad?: boolean;
 }
 
 export function createMechState(x: number, y: number, z: number, yaw: number, weapon: WeaponId = 'mg', chassis: MechPartConfig = DEFAULT_PARTS): MechState {
@@ -205,6 +207,8 @@ export function stepMech(s: MechState, input: MechInput, dt: number, arena: Aren
     s.y = floor;
     s.vy = 0;
     s.grounded = true;
+    const pad = floor === arena.deckY ? arena.padAt(s.x, s.z) : null;
+    if (pad) { s.vy = pad.power; s.grounded = false; events.pad = true; }
   } else if (s.y > floor + 0.02) {
     s.grounded = false;
   }
