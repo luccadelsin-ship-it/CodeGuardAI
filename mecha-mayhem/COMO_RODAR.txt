@@ -1,0 +1,17 @@
+COMO RODAR O MECHA MAYHEM NO SEU PC
+
+1. Instale o Node.js 22 ou mais novo (https://nodejs.org).
+2. Extraia este ZIP.
+3. Jeito facil: de dois cliques em INICIAR_JOGO.bat.
+   Jeito manual: abra o terminal nesta pasta e rode:
+      npm install
+      npm run dev
+4. Abra http://localhost:5173/ no navegador. Deixe o terminal aberto enquanto joga.
+
+Outros comandos:
+   npm run live   - igual ao dev, mas reinicia sozinho se cair
+   npm run build  - confere e gera a versao final
+   npm start      - roda a versao final (depois do build) em http://localhost:8080/
+
+Se o PowerShell disser que scripts estao desabilitados:
+   Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
