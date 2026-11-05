@@ -28,39 +28,47 @@
         <div class="loading-bottom"><span>FROZEN OUTPOST / SETOR 01</span><span>ESTABELECENDO CONEXÃO COM A ARENA</span></div>
       </section>
 
-      <section id="menu" class="screen menu-screen hidden">
-        <header class="menu-header"><span class="brand-mini"><span class="brand-icon">✦</span> MECHA MAYHEM</span><span class="header-status"><i></i> SISTEMAS OPERACIONAIS <b>·</b> V 0.3</span></header>
-        <div class="menu-layout">
-          <div class="menu-main">
-            <div class="menu-kicker"><span>01 / 06</span><span class="kicker-line"></span><span>PROTOCOLO DE COMBATE</span></div>
-            <h1 class="game-title"><span>MECHA</span><span>MAYHEM</span></h1>
-            <p class="menu-subtitle">CONSTRUA A MÁQUINA. DOMINE A ARENA.</p>
-            <div class="menu-actions">
-              <button id="start-button" class="primary-action"><span class="action-icon">▶</span><span><small>5 ONDAS + CHEFE</small><strong>TREINAMENTO</strong></span><span class="action-arrow">↗</span></button>
-              <button id="lobby-button" class="secondary-action lobby-action"><span class="action-number">◈</span><span>LOBBY / PREPARAR MISSÃO</span><span>↗</span></button>
-              <button id="online-button" class="secondary-action online-action"><span class="action-number">02</span><span>ONLINE · TIMES / CORE</span><span>↗</span></button>
-              <button id="garage-button" class="secondary-action"><span class="action-number">03</span><span>OFICINA / ARMAS</span><span>↗</span></button>
-              <button id="progress-button" class="secondary-action progress-action"><span class="action-number">★</span><span>PASSE · NÍVEL · LOJA</span><span id="menu-level">NV 1</span></button>
-              <button id="settings-button" class="secondary-action"><span class="action-number">04</span><span>CONFIGURAÇÕES</span><span>↗</span></button>
-              <button id="credits-button-mobile" class="secondary-action mobile-credits"><span class="action-number">05</span><span>CRÉDITOS DOS MODELOS</span><span>↗</span></button>
+      <section id="menu" class="screen menu-screen hub-screen hidden">
+        <header class="hub-top">
+          <span class="brand-mini"><span class="brand-icon">✦</span> MECHA MAYHEM</span>
+          <nav class="hub-nav" aria-label="Menu principal">
+            <button class="hub-tab active" id="hub-play-tab">JOGAR</button>
+            <button class="hub-tab" id="garage-button">OFICINA</button>
+            <button class="hub-tab" id="progress-button">PASSE · LOJA</button>
+            <button class="hub-tab" id="online-button">ONLINE</button>
+            <button class="hub-tab" id="editor-button">CRIAR MAPA</button>
+            <button class="hub-tab" id="settings-button">⚙</button>
+          </nav>
+          <div class="hub-profile"><span class="hub-level" id="menu-level">NV 1</span><div><strong id="hub-name">PILOTO</strong><small id="hub-credits">0 CR</small></div></div>
+        </header>
+        <aside class="hub-squad">
+          <span class="eyebrow">ESQUADRÃO</span>
+          <div class="squad-slot me"><b id="squad-name">VOCÊ</b><small id="squad-title">PILOTO</small></div>
+          <button class="squad-slot add" data-squad>+ CONVIDAR (ONLINE)</button>
+          <button class="squad-slot add" data-squad>+ CONVIDAR (ONLINE)</button>
+          <button class="squad-slot add" data-squad>+ CONVIDAR (ONLINE)</button>
+        </aside>
+        <div class="hub-title"><h1 class="game-title"><span>MECHA</span><span>MAYHEM</span></h1></div>
+        <aside class="hub-mode menu-intel">
+          <div class="intel-header"><span class="corner-glyph">◈</span><span id="hub-mode-name">TREINO · 5 ONDAS</span><span id="theme-index">01 / 03</span></div>
+          <div class="intel-body">
+            <span class="eyebrow" id="map-tag">FROZEN OUTPOST</span>
+            <div class="theme-picker"><button id="theme-prev" class="theme-arrow" aria-label="Condição anterior">◀</button><h2 id="theme-name">DIA POLAR</h2><button id="theme-next" class="theme-arrow" aria-label="Próxima condição">▶</button></div>
+            <p id="theme-detail">Céu limpo, visibilidade máxima e neve leve.</p>
+            <div class="difficulty-picker" role="radiogroup" aria-label="Dificuldade">
+              <button class="chip" data-difficulty="recruit">RECRUTA</button><button class="chip" data-difficulty="veteran">VETERANO</button><button class="chip" data-difficulty="elite">ELITE</button>
             </div>
+            <div class="intel-stats"><span>RECORDE <b id="best-score">0</b></span><button id="lobby-button" class="chip hub-change">TROCAR MAPA / MODO</button></div>
           </div>
-          <aside class="menu-intel">
-            <div class="intel-header"><span class="corner-glyph">◈</span><span>PRÓXIMA OPERAÇÃO</span><span id="theme-index">01 / 03</span></div>
-            <div class="intel-map-art" id="intel-map"><div class="map-grid"></div><span class="map-crosshair">⌖</span><span class="map-tag" id="map-tag">SETOR ÁRTICO 01</span></div>
-            <div class="intel-body">
-              <span class="eyebrow">FROZEN OUTPOST · CONDIÇÃO</span>
-              <div class="theme-picker"><button id="theme-prev" class="theme-arrow" aria-label="Condição anterior">◀</button><h2 id="theme-name">DIA POLAR</h2><button id="theme-next" class="theme-arrow" aria-label="Próxima condição">▶</button></div>
-              <p id="theme-detail">Céu limpo, visibilidade máxima e neve leve.</p>
-              <label class="field"><span>MAPA</span><select id="map-choice"><option value="frozen">FROZEN OUTPOST</option><option value="refinery">REFINARIA</option></select></label>
-              <div class="difficulty-picker" role="radiogroup" aria-label="Dificuldade">
-                <button class="chip" data-difficulty="recruit">RECRUTA</button><button class="chip" data-difficulty="veteran">VETERANO</button><button class="chip" data-difficulty="elite">ELITE</button>
-              </div>
-              <div class="intel-stats"><span>MODO <b>ONDAS</b></span><span>HOSTIS <b>5 TIPOS</b></span><span>RECORDE <b id="best-score">0</b></span></div>
-            </div>
-          </aside>
-        </div>
-        <footer class="menu-footer"><span>W A S D · MOVER &nbsp; MOUSE · MIRAR &nbsp; 1-6 · ARMAS &nbsp; F · IMPACTO</span><span><button id="credits-button" class="footer-button">CRÉDITOS DOS MODELOS ↗</button> &nbsp;&nbsp; FROZEN OUTPOST <b>◉</b> ONLINE</span></footer>
+          <div id="intel-map" hidden></div>
+          <button id="start-button" class="hub-play"><small>PRONTO</small><strong>JOGAR</strong></button>
+        </aside>
+        <footer class="hub-footer"><span>W A S D · MOVER &nbsp; MOUSE · MIRAR &nbsp; 1-6 · ARMAS &nbsp; F · IMPACTO</span><button id="credits-button" class="footer-button">CRÉDITOS ↗</button><button id="credits-button-mobile" class="footer-button mobile-credits">CRÉDITOS ↗</button></footer>
+      </section>
+
+      <section id="editor" class="screen panel-screen editor-screen hidden">
+        <header class="panel-header"><button class="back-button" data-back>← VOLTAR</button><span>CRIAR MAPA // EDITOR</span><span>VISTA DE CIMA</span></header>
+        <div class="editor-panel" id="editor-root"></div>
       </section>
 
       <section id="lobby" class="screen lobby-screen hidden">

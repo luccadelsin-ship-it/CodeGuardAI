@@ -20,7 +20,7 @@ import {
   Vector3,
 } from '@babylonjs/core';
 import '@babylonjs/loaders/glTF';
-import { createArena, type Arena, type ArenaLayout, type Cover } from '../shared/arena';
+import { type CustomMap, createArena, type Arena, type ArenaLayout, type Cover } from '../shared/arena';
 import { flareTexture } from './fx';
 import { MAPS, type MapId } from '../shared/maps';
 import { createWorldGraphics } from './worldGraphics';
@@ -132,7 +132,7 @@ function instantiate(container: AssetContainer, name: string): TransformNode {
 }
 
 /** Load the Blender-authored arena and dress it with new cover, props, weather and lighting themes. */
-export async function createWorld(scene: Scene, onProgress?: (label: string) => void, mapId: MapId = 'frozen'): Promise<World> {
+export async function createWorld(scene: Scene, onProgress?: (label: string) => void, mapId: MapId = 'frozen', custom: CustomMap | null = null): Promise<World> {
   const ownedMeshes: AbstractMesh[] = [];
   const importedNodes: Array<AbstractMesh | TransformNode> = [];
   const physics: PhysicsAggregate[] = [];
@@ -153,7 +153,7 @@ export async function createWorld(scene: Scene, onProgress?: (label: string) => 
   const response = await fetch(`/assets/models/${MAPS[mapId].layoutFile}`);
   if (!response.ok) throw new Error(`${MAPS[mapId].name} layout: HTTP ${response.status}`);
   const layout = await response.json() as ArenaLayout;
-  const arena = createArena(layout, { mapId });
+  const arena = createArena(layout, { mapId, custom });
   /** Training start: arena centre, on top of a low dais or beside a tall centrepiece. */
   const trainingSpawn = (): Vector3 => {
     let z = 0;
@@ -521,7 +521,9 @@ export async function createWorld(scene: Scene, onProgress?: (label: string) => 
   }
 
   // Explosive barrels (training mode). They are real cover until destroyed.
-  const barrels: Barrel[] = BARREL_SPOTS.map(([x, z], id) => {
+  // Barrels never spawn inside placed pieces (custom maps can put cover anywhere).
+  const barrelSpots = BARREL_SPOTS.filter(([x, z]) => !arena.builtCover.some((c) => Math.abs(c.x - x) * 2 < c.widthX + 1.2 && Math.abs(c.z - z) * 2 < c.widthZ + 1.2) && !arena.jumpPads.some((p) => Math.hypot(p.x - x, p.z - z) < 2));
+  const barrels: Barrel[] = barrelSpots.map(([x, z], id) => {
     const node = barrel ? instantiate(barrel, `explosive-barrel-${id}`) : new TransformNode(`explosive-barrel-${id}`, scene);
     node.position.set(x, deckY, z);
     node.rotation.y = id * 1.3;

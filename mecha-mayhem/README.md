@@ -22,6 +22,13 @@ Jogo 3D de batalha de robôs no navegador, feito com **Babylon.js**, **TypeScrip
 - **30 GLBs no Triverse** não foram gerados: não há `TRIVERSE_API_KEY` nem acesso à conta neste ambiente. Plano e comandos em `docs/TRIVERSE_30_PARTS_PLAN.json`. O robô em jogo usa as peças procedurais (silhueta + cores + detalhes de cada família).
 - Gráficos: revisados por capturas (sem erros); não houve nova passada de materiais/iluminação além das peças de mapa. FPS em GPU real e jogo pela internet não foram testados.
 
+## Lobby estilo Fortnite e editor de mapas (novo)
+
+- **Menu principal virou um lobby**: abas no topo (JOGAR, OFICINA, PASSE · LOJA, ONLINE, CRIAR MAPA, ⚙), nível e créditos no canto, esquadrão à esquerda (os espaços "+" levam ao online para convidar amigos por sala privada), robô no centro e cartão do modo com o botão amarelo **JOGAR**. Funciona em desktop, celular em pé e deitado.
+- **CRIAR MAPA** (`src/game/editor.ts`): planta vista de cima de uma das 4 arenas base; clique/toque para colocar barricadas, blocos, paredes altas, colunas, dutos puláveis, rochas, plataformas e plataformas de salto; GIRAR (R), APAGAR, LIMPAR. Até 60 peças e 8 saltos; peças só entram no piso e fora do ponto de início. Salva no navegador, gera **código de compartilhamento** para mandar a um amigo (IMPORTAR) e tem **JOGAR**, que abre o treino direto no mapa criado.
+- As peças usam o mesmo código de colisão, chão, linha de visão e navegação da IA que os mapas oficiais. Mapas criados valem no **treino**; o online continua nos 4 mapas oficiais.
+- Smoke: **71/71** checks, sem erros de console (inclui editor e mapa criado em jogo).
+
 ## Progressão, passe e loja (novo)
 
 - **Menu → PASSE · NÍVEL · LOJA** (`src/game/progression.ts`). Cada partida (treino ou online) dá **XP** (abates, ondas, vitória, pontuação) e **créditos do jogo**. Subir de nível dá bônus de créditos.

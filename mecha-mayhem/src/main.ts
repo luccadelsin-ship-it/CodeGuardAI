@@ -13,6 +13,8 @@ import { PART_STYLES, normalizeParts, type MechPartConfig } from './shared/custo
 import { MAPS, MAP_ORDER, mapFromSearch, type MapId } from './shared/maps';
 import { FAMILIES, FAMILY_ORDER, computeLoadout, type FamilyId } from './shared/parts';
 import { PASS_TIER_XP, SEASON_PASS, SHOP, awardMatch, buyItem, claimTier, equip, equippedItem, levelInfo, loadProfile, passTier, saveProfile } from './game/progression';
+import { MapEditor, findCustomMap } from './game/editor';
+import type { CustomMap } from './shared/arena';
 import './style.css';
 
 const el = <T extends HTMLElement = HTMLElement>(id: string): T => {
@@ -26,7 +28,7 @@ const loading = el('loading');
 const progressFill = el('loading-fill');
 const progressLabel = el('loading-label');
 const progressPercent = el('loading-percent');
-const screenIds = ['menu', 'lobby', 'garage', 'online', 'settings', 'credits', 'progress', 'pause', 'result'] as const;
+const screenIds = ['menu', 'lobby', 'garage', 'online', 'settings', 'credits', 'progress', 'editor', 'pause', 'result'] as const;
 type UiScreen = typeof screenIds[number] | 'game';
 let currentScreen: UiScreen = 'menu';
 let game: CombatGame;
@@ -39,7 +41,19 @@ let rotateTimer = 0;
 let scoreboardHeld = false;
 let garageReturn: 'menu' | 'lobby' = 'menu';
 let partConfig: MechPartConfig = normalizeParts(null);
-const selectedMap = mapFromSearch(location.search);
+const customMap = findCustomMap(new URLSearchParams(location.search).get('custom'));
+const selectedMap = customMap ? customMap.base : mapFromSearch(location.search);
+let editor: MapEditor | null = null;
+
+/** Reload into a created map; the training starts right after loading. */
+function playCustomMap(map: CustomMap): void {
+  const url = new URL(location.href);
+  url.searchParams.set('map', map.base);
+  url.searchParams.set('custom', map.id);
+  url.searchParams.set('play', '1');
+  url.searchParams.delete('lobby');
+  location.href = url.href;
+}
 
 function progress(percent: number, label: string): void {
   progressFill.style.width = `${percent}%`;
@@ -398,6 +412,10 @@ function refreshProfileBadge(): void {
   const info = levelInfo(profile.xp);
   el('menu-level').textContent = `NV ${info.level}`;
   el('progress-credits').textContent = `${profile.credits} CR`;
+  el('hub-credits').textContent = `${profile.credits} CR · ${info.into}/${info.need} XP`;
+  el('hub-name').textContent = loadSetting('pilot', '') || 'PILOTO';
+  el('squad-name').textContent = `${loadSetting('pilot', '') || 'VOCÊ'} · NV ${info.level}`;
+  el('squad-title').textContent = profile.title;
 }
 
 function renderProgress(): void {
@@ -519,6 +537,7 @@ function applyTheme(index: number): void {
 
 async function joinOnline(mode: OnlineMode, room?: string, create?: boolean): Promise<void> {
   const status = el('online-status');
+  if (customMap) { status.textContent = 'MAPAS CRIADOS FUNCIONAM NO TREINO. VOLTE A UM MAPA PADRÃO PARA JOGAR ONLINE.'; status.classList.add('error'); return; }
   const name = (el<HTMLInputElement>('pilot-name').value.trim() || 'PILOTO').toUpperCase().slice(0, 16);
   saveSetting('pilot', name);
   const url = el<HTMLInputElement>('server-url').value.trim() || defaultServerUrl();
@@ -584,6 +603,14 @@ function bindUI(): void {
   refreshProfileBadge();
   el('credits-button').addEventListener('click', () => { game.setMode('settings'); show('credits'); });
   el('credits-button-mobile').addEventListener('click', () => { game.setMode('settings'); show('credits'); });
+  el('hub-play-tab').addEventListener('click', () => el('start-button').focus());
+  document.querySelectorAll<HTMLButtonElement>('[data-squad]').forEach((b) => b.addEventListener('click', () => { game.setMode('settings'); show('online'); toast('CRIE UMA SALA PRIVADA E ENVIE O CÓDIGO AOS AMIGOS'); }));
+  el('editor-button').addEventListener('click', () => {
+    game.setMode('settings');
+    editor ??= new MapEditor(el('editor-root'), { toast, play: playCustomMap });
+    editor.open(customMap ?? undefined);
+    show('editor');
+  });
   document.querySelectorAll<HTMLButtonElement>('[data-back]').forEach((button) => button.addEventListener('click', () => {
     if (currentScreen === 'garage' && garageReturn === 'lobby') { openLobby(); return; }
     game.setMode('menu'); show('menu');
@@ -739,12 +766,9 @@ async function bootstrap(): Promise<void> {
   }
   progress(38, 'Preparando arena 3D');
   const mapId = selectedMap;
-  const world = await createWorld(scene, (label) => progress(55, label), mapId);
-  el('hud-map').textContent = MAPS[mapId].name;
-  const mapChoice = el<HTMLSelectElement>('map-choice');
-  mapChoice.replaceChildren(...MAP_ORDER.map((id) => new Option(MAPS[id].name, id)));
-  mapChoice.value = mapId;
-  mapChoice.addEventListener('change', () => changeMap(mapChoice.value as MapId));
+  const world = await createWorld(scene, (label) => progress(55, label), mapId, customMap);
+  el('hud-map').textContent = customMap ? customMap.name : MAPS[mapId].name;
+  el('map-tag').textContent = customMap ? `MAPA CRIADO · ${customMap.name} (${MAPS[mapId].label})` : MAPS[mapId].label;
   progress(82, 'Armando Striker e interface de combate');
   game = new CombatGame(scene, engine, canvas, world, loadSetting('palette', 'arctic') as MechPalette);
   touch = new TouchControls(el('app'));
@@ -782,7 +806,9 @@ async function bootstrap(): Promise<void> {
   progress(100, 'Sistemas operacionais');
   window.setTimeout(() => {
     loading.classList.add('hidden');
-    if (new URLSearchParams(location.search).get('lobby') === '1') openLobby(); else show('menu');
+    const params = new URLSearchParams(location.search);
+    if (customMap && params.get('play') === '1') { params.delete('play'); history.replaceState(null, '', `?${params}`); el('start-button').click(); }
+    else if (params.get('lobby') === '1') openLobby(); else show('menu');
   }, 450);
 }
 

@@ -326,6 +326,37 @@ try {
   await page.screenshot({ path: `${out}/progress-shop.png` });
   await page.locator('#progress [data-back]').click();
 
+  // Map editor: place pieces on the canvas, save, and play the created map.
+  await page.locator('#editor-button').click();
+  await page.locator('#editor').waitFor({ state: 'visible' });
+  await page.locator('#ed-canvas').waitFor({ state: 'visible' });
+  await page.waitForTimeout(600);
+  const box = await page.locator('#ed-canvas').boundingBox();
+  const at = (x, z) => [box.x + ((x + 42) / 84) * box.width, box.y + ((42 - z) / 84) * box.height];
+  await page.locator('[data-tool="pillar"]').click();
+  await page.mouse.click(...at(0, 6));
+  await page.locator('[data-tool="wall"]').click();
+  await page.mouse.click(...at(-6, -3));
+  await page.locator('[data-tool="pad"]').click();
+  await page.mouse.click(...at(6, -5));
+  await page.locator('[data-tool="block"]').click();
+  await page.mouse.click(...at(0, 0));
+  await page.locator('#ed-name').fill('ARENA TESTE');
+  await page.locator('#ed-save').click();
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('mecha-mayhem:custom-maps') ?? '[]')[0]);
+  check('editor: peças colocadas e mapa salvo (início protegido)', saved?.name === 'ARENA TESTE' && saved.cover.length === 2 && saved.pads.length === 1, `${saved?.cover.length} peças · ${saved?.pads.length} salto`);
+  await page.screenshot({ path: `${out}/editor.png` });
+  await page.locator('#ed-export').click();
+  const shareCode = await page.locator('#ed-code').inputValue();
+  check('editor: código de compartilhamento gerado', shareCode.length > 40);
+  await page.locator('#ed-play').click();
+  await page.waitForURL(/custom=/, { timeout: 30000 });
+  await page.locator('#hud').waitFor({ state: 'visible', timeout: 120000 });
+  const customPlay = await page.evaluate(() => ({ cover: window.__mecha.world.arena.builtCover.map((c) => c.kind), pads: window.__mecha.world.arena.jumpPads.length, mode: window.__mecha.mode }));
+  check('editor: mapa criado carrega no treino com as peças do jogador', customPlay.mode === 'game' && customPlay.cover.includes('pillar') && customPlay.cover.includes('wall') && customPlay.pads === 1);
+  await game(page, () => window.__mecha.debugStep(2));
+  await page.screenshot({ path: `${out}/editor-play.png` });
+
   // ------------------------------------------------------------------- mobile
   const mobileContext = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
   const mobile = await mobileContext.newPage();
@@ -459,7 +490,7 @@ try {
   watch(refineryPage, 'refinery');
   await refineryPage.goto(`${base}/?map=refinery&debug`, { waitUntil: 'domcontentloaded' });
   await refineryPage.locator('#menu').waitFor({ state: 'visible', timeout: 120000 });
-  const refineryScene = await game(refineryPage, () => ({ selected: document.querySelector('#map-choice').value, deck: window.__mecha.world.arena.layout.visualAsset, meshes: window.__mecha.scene.meshes.filter((mesh) => mesh.name.startsWith('refinery-')).length }));
+  const refineryScene = await game(refineryPage, () => ({ selected: document.querySelector('#map-tag').textContent.includes('REFINARIA') ? 'refinery' : document.querySelector('#map-tag').textContent, deck: window.__mecha.world.arena.layout.visualAsset, meshes: window.__mecha.scene.meshes.filter((mesh) => mesh.name.startsWith('refinery-')).length }));
   check('refinaria: mapa 3D procedural carrega', refineryScene.selected === 'refinery' && refineryScene.deck === 'procedural:refinery' && refineryScene.meshes > 10, `${refineryScene.meshes} peças`);
   await refineryPage.screenshot({ path: `${out}/refinery.png` });
   for (const id of ['neon', 'canyon']) {

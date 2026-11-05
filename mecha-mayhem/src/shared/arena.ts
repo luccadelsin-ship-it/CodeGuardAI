@@ -151,11 +151,41 @@ function rayBox(origin: Vec3, dir: Vec3, maxDistance: number, deckY: number, cov
   return near <= maxDistance ? near : null;
 }
 
-export function createArena(layout: ArenaLayout, options: { builtCover?: boolean; mapId?: ArenaMapId } = {}): Arena {
+/** A player-made map: a base arena plus placed pieces (see the in-game editor). */
+export interface CustomMap { id: string; name: string; base: ArenaMapId; cover: Cover[]; pads: Array<{ x: number; z: number }> }
+
+export const EDITOR_PIECES: Record<string, { label: string; widthX: number; widthZ: number; height: number; kind: NonNullable<Cover['kind']> | 'pad' }> = {
+  barricade: { label: 'BARRICADA', widthX: 2.7, widthZ: 0.6, height: 1.35, kind: 'barricade' },
+  block: { label: 'BLOCO', widthX: 1.3, widthZ: 1.3, height: 1.15, kind: 'block' },
+  wall: { label: 'PAREDE ALTA', widthX: 3.2, widthZ: 0.5, height: 2.4, kind: 'wall' },
+  pillar: { label: 'COLUNA', widthX: 2.2, widthZ: 2.2, height: 3.2, kind: 'pillar' },
+  pipe: { label: 'DUTO (PULÁVEL)', widthX: 3.8, widthZ: 0.7, height: 0.95, kind: 'pipe' },
+  ore: { label: 'ROCHA', widthX: 1.8, widthZ: 1.8, height: 1.6, kind: 'ore' },
+  dais: { label: 'PLATAFORMA', widthX: 5.6, widthZ: 5.6, height: 1.0, kind: 'dais' },
+  pad: { label: 'PLATAFORMA DE SALTO', widthX: 2.2, widthZ: 2.2, height: 0, kind: 'pad' },
+};
+
+/** Clamp untrusted custom map data (localStorage, imported codes) to sane, playable values. */
+export function sanitizeCustomMap(value: unknown): CustomMap | null {
+  if (!value || typeof value !== 'object') return null;
+  const v = value as Partial<CustomMap>;
+  const bases: ArenaMapId[] = ['frozen', 'refinery', 'neon', 'canyon'];
+  const base = bases.includes(v.base as ArenaMapId) ? v.base as ArenaMapId : 'frozen';
+  const num = (n: unknown, lo: number, hi: number) => Math.max(lo, Math.min(hi, Number(n) || 0));
+  const kinds = new Set(['barricade', 'block', 'wall', 'pillar', 'pipe', 'ore', 'dais']);
+  const cover = (Array.isArray(v.cover) ? v.cover : []).slice(0, 60).filter((c) => c && kinds.has(String(c.kind))).map((c) => ({
+    x: num(c.x, -45, 45), z: num(c.z, -45, 45), widthX: num(c.widthX, 0.3, 6), widthZ: num(c.widthZ, 0.3, 6), height: num(c.height, 0.3, 3.5), kind: c.kind,
+  })) as Cover[];
+  const pads = (Array.isArray(v.pads) ? v.pads : []).slice(0, 8).map((p) => ({ x: num(p?.x, -45, 45), z: num(p?.z, -45, 45) }));
+  return { id: String(v.id ?? `map-${Date.now()}`).slice(0, 40), name: String(v.name ?? 'MEU MAPA').slice(0, 24).toUpperCase(), base, cover, pads };
+}
+
+export function createArena(layout: ArenaLayout, options: { builtCover?: boolean; mapId?: ArenaMapId; custom?: CustomMap | null } = {}): Arena {
   const deckY = layout.deckTopY;
   const mapId = options.mapId ?? 'frozen';
-  const builtCover: Cover[] = options.builtCover === false ? [] : [...(MAP_COVER[mapId] ?? BUILT_COVER), ...(mapId === 'frozen' ? [] : bridgeBlocks(layout))];
-  const jumpPads = jumpPadsFor(layout);
+  const custom = options.custom ?? null;
+  const builtCover: Cover[] = options.builtCover === false ? [] : custom ? custom.cover.map((c) => ({ ...c })) : [...(MAP_COVER[mapId] ?? BUILT_COVER), ...(mapId === 'frozen' ? [] : bridgeBlocks(layout))];
+  const jumpPads = custom ? custom.pads.map((p) => ({ x: p.x, z: p.z, radius: 1.1, power: 14.5 })) : jumpPadsFor(layout);
   const staticCover: Cover[] = [
     ...layout.cover.map((cover) => ({ ...cover, kind: 'layout' as const })),
     ...PROP_COVER,
