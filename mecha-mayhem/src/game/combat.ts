@@ -295,6 +295,11 @@ export class CombatGame {
 
   fps(): number { return this.engine.getFps(); }
 
+  /** Numbers used by the progression system when a match ends. */
+  matchStats(): { kills: number; waves: number } {
+    return { kills: this.kills, waves: this.session === 'training' ? (this.waveActive ? this.waveIndex : this.waveIndex + 1) : 0 };
+  }
+
   /**
    * 'minimal' is for computers without a graphics card (software WebGL): half
    * resolution, no shadows, glow, bloom or post-processing, no snow, few particles.
@@ -648,11 +653,23 @@ export class CombatGame {
     if (s.jetting && Math.random() < dt * 30) this.fx.sparks(this.player.root.position.add(new Vector3(-sin * 0.7, 1.9, -cos * 0.7)), [0.5, 0.9, 1], 2, 0.4);
   }
 
+  /** Equipped cosmetics (shop / season pass). Visual only. */
+  cosmetics: { trail: Rgb; kill: string; killColor: Rgb } = { trail: [0.4, 0.85, 1], kill: 'kill-default', killColor: [1, 0.55, 0.2] };
+
+  /** Extra flourish on kills according to the equipped kill effect. */
+  killEffect(at: Vector3): void {
+    const c = this.cosmetics.killColor;
+    if (this.cosmetics.kill === 'kill-storm') { this.fx.shockwave(at, 5, c, 0.5, 0.12); this.fx.sparks(at, c, 26, 1.6); }
+    else if (this.cosmetics.kill === 'kill-void') { this.fx.shockwave(at, 6, c, 0.6, 0.2); this.fx.shockwave(at, 3, [1, 1, 1], 0.4, 0.08); this.fx.orb(at, c, 2.2, 0.5, true); }
+    else if (this.cosmetics.kill === 'kill-gold') { for (let i = 0; i < 3; i++) this.fx.sparks(at.add(new Vector3(0, i * 0.8, 0)), c, 22, 1.4); this.fx.shockwave(at, 4.5, c, 0.5, 0.14); }
+  }
+
   private dashTrail(): void {
     const s = this.state;
     for (let i = 0; i < 4; i++) {
       const p = new Vector3(s.x - s.dashX * i * 0.9, s.y + 1.8, s.z - s.dashZ * i * 0.9);
-      this.fx.orb(p, [0.4, 0.85, 1], 1.4 - i * 0.2, 0.25 + i * 0.05);
+      this.fx.orb(p, this.cosmetics.trail, 1.4 - i * 0.2, 0.25 + i * 0.05);
+      if (i % 2 === 0) this.fx.sparks(p, this.cosmetics.trail, 4, 0.5);
     }
   }
 
@@ -912,6 +929,7 @@ export class CombatGame {
   }
 
   private killEnemy(enemy: Enemy, from: Vector3): void {
+    this.killEffect(enemy.center);
     this.kills++;
     this.combo = this.comboTime > 0 ? Math.min(5, this.combo + 1) : 1;
     this.comboTime = 4.5;
@@ -990,7 +1008,7 @@ export class CombatGame {
     this.sfx.hit(crit);
     this.float(at, `${Math.round(amount)}`, crit ? 'crit' : 'hit');
     this.onHit?.(crit, kill);
-    if (kill) this.sfx.kill();
+    if (kill) { this.sfx.kill(); this.killEffect(at); }
   }
 
   /** Online scoreboard values for the HUD. */

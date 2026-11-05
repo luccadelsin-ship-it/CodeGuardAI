@@ -12,6 +12,7 @@ import { WEAPONS, WEAPON_ORDER, isWeaponId, type WeaponId } from './shared/weapo
 import { PART_STYLES, normalizeParts, type MechPartConfig } from './shared/customization';
 import { MAPS, MAP_ORDER, mapFromSearch, type MapId } from './shared/maps';
 import { FAMILIES, FAMILY_ORDER, computeLoadout, type FamilyId } from './shared/parts';
+import { PASS_TIER_XP, SEASON_PASS, SHOP, awardMatch, buyItem, claimTier, equip, equippedItem, levelInfo, loadProfile, passTier, saveProfile } from './game/progression';
 import './style.css';
 
 const el = <T extends HTMLElement = HTMLElement>(id: string): T => {
@@ -25,7 +26,7 @@ const loading = el('loading');
 const progressFill = el('loading-fill');
 const progressLabel = el('loading-label');
 const progressPercent = el('loading-percent');
-const screenIds = ['menu', 'lobby', 'garage', 'online', 'settings', 'credits', 'pause', 'result'] as const;
+const screenIds = ['menu', 'lobby', 'garage', 'online', 'settings', 'credits', 'progress', 'pause', 'result'] as const;
 type UiScreen = typeof screenIds[number] | 'game';
 let currentScreen: UiScreen = 'menu';
 let game: CombatGame;
@@ -185,9 +186,9 @@ function renderParts(): void { renderPartGrid(); renderChassisStats(); }
 
 function bindPartCustomization(): void {
   try { partConfig = normalizeParts(JSON.parse(loadSetting('parts', '{}'))); } catch { partConfig = normalizeParts(null); }
-  document.querySelectorAll<HTMLButtonElement>('.part-tab').forEach((tab) => tab.addEventListener('click', () => {
+  document.querySelectorAll<HTMLButtonElement>('.part-tab[data-slot]').forEach((tab) => tab.addEventListener('click', () => {
     activeSlot = tab.dataset.slot as typeof activeSlot;
-    document.querySelectorAll('.part-tab').forEach((t) => t.classList.toggle('active', t === tab));
+    document.querySelectorAll('.part-tab[data-slot]').forEach((t) => t.classList.toggle('active', t === tab));
     renderParts();
   }));
   game.setChassis(partConfig);
@@ -383,7 +384,66 @@ function escapeHtml(text: string): string {
 
 function bestKey(difficulty: Difficulty): string { return `best-${difficulty}`; }
 
+const profile = loadProfile();
+let progressTab: 'pass' | 'shop' | 'equip' = 'pass';
+const hex = (c: [number, number, number]) => `#${c.map((v) => Math.round(v * 255).toString(16).padStart(2, '0')).join('')}`;
+
+function applyCosmetics(): void {
+  const trail = equippedItem(profile, 'trail'), kill = equippedItem(profile, 'kill'), glow = equippedItem(profile, 'glow');
+  game.cosmetics = { trail: trail.color, kill: kill.id, killColor: kill.color };
+  game.player.setGlowOverride(glow.id === 'glow-default' ? null : hex(glow.color));
+}
+
+function refreshProfileBadge(): void {
+  const info = levelInfo(profile.xp);
+  el('menu-level').textContent = `NV ${info.level}`;
+  el('progress-credits').textContent = `${profile.credits} CR`;
+}
+
+function renderProgress(): void {
+  const info = levelInfo(profile.xp);
+  el('progress-level').textContent = `${info.level}`;
+  el('progress-title').textContent = profile.title;
+  el('xp-fill').style.width = `${(info.into / info.need) * 100}%`;
+  el('xp-text').textContent = `${info.into} / ${info.need} XP · ${profile.credits} CRÉDITOS`;
+  refreshProfileBadge();
+  const body = el('progress-body');
+  const tier = passTier(profile.passXp);
+  if (progressTab === 'pass') {
+    body.innerHTML = `<p class="progress-note">Passe gratuito · nível ${tier}/${SEASON_PASS.length} · ${profile.passXp % PASS_TIER_XP}/${PASS_TIER_XP} XP para o próximo.</p><div class="pass-grid">${SEASON_PASS.map((t) => {
+      const reward = t.reward.item ? SHOP.find((s) => s.id === t.reward.item)?.name ?? '' : t.reward.title ? `TÍTULO: ${t.reward.title}` : `${t.reward.credits} CR`;
+      const state = profile.claimed.includes(t.tier) ? 'claimed' : t.tier <= tier ? 'ready' : 'locked';
+      return `<button class="pass-tier ${state}${t.reward.item ? ' item' : ''}" data-tier="${t.tier}" ${state === 'ready' ? '' : 'disabled'}><b>${t.tier}</b><span>${reward}</span><small>${state === 'claimed' ? 'RESGATADO' : state === 'ready' ? 'RESGATAR' : 'BLOQUEADO'}</small></button>`;
+    }).join('')}</div>`;
+    body.querySelectorAll<HTMLButtonElement>('.pass-tier.ready').forEach((b) => b.addEventListener('click', () => { const got = claimTier(profile, Number(b.dataset.tier)); if (got) toast(`RECOMPENSA: ${got}`); renderProgress(); }));
+  } else {
+    const items = progressTab === 'shop' ? SHOP.filter((s) => s.price > 0) : SHOP.filter((s) => profile.owned.includes(s.id));
+    const slotName = { trail: 'RASTRO DO DASH', kill: 'EFEITO DE ABATE', glow: 'BRILHO DAS ARMAS' } as const;
+    body.innerHTML = `${progressTab === 'equip' ? `<label class="field"><span>TÍTULO</span><select id="title-select">${profile.titles.map((t) => `<option ${t === profile.title ? 'selected' : ''}>${t}</option>`).join('')}</select></label>` : ''}<div class="shop-grid">${items.map((s) => {
+      const owned = profile.owned.includes(s.id), on = profile.equipped[s.slot] === s.id, locked = info.level < s.level;
+      const action = on ? 'EQUIPADO' : owned ? 'EQUIPAR' : locked ? `NÍVEL ${s.level}` : `${s.price} CR`;
+      return `<button class="shop-item${on ? ' on' : ''}${locked && !owned ? ' locked' : ''}" data-item="${s.id}" style="--fx:${hex(s.slot === 'glow' && s.id === 'glow-default' ? [0.4, 0.85, 1] : s.color)}"><i></i><small>${slotName[s.slot]}</small><strong>${s.name}</strong><span>${s.detail}</span><b>${action}</b></button>`;
+    }).join('')}</div>`;
+    body.querySelectorAll<HTMLButtonElement>('.shop-item').forEach((b) => b.addEventListener('click', () => {
+      const id = b.dataset.item!;
+      if (!profile.owned.includes(id)) {
+        const r = buyItem(profile, id);
+        toast(r === 'ok' ? 'COMPRADO E EQUIPADO' : r === 'level' ? 'NÍVEL INSUFICIENTE' : 'CRÉDITOS INSUFICIENTES');
+        if (r !== 'ok') return;
+      }
+      equip(profile, id);
+      applyCosmetics();
+      renderProgress();
+    }));
+    document.getElementById('title-select')?.addEventListener('change', (e) => { profile.title = (e.target as HTMLSelectElement).value; saveProfile(profile); renderProgress(); });
+  }
+}
+
 function showResult(result: ResultInfo): void {
+  const stats = game.matchStats();
+  const summary = awardMatch(profile, { score: result.score, kills: stats.kills, won: result.won, waves: stats.waves, online: game.session === 'online' });
+  el('result-progress').innerHTML = `<span>+${summary.xp} XP</span><span>+${summary.credits} CRÉDITOS</span>${summary.levelAfter > summary.levelBefore ? `<span class="up">NÍVEL ${summary.levelAfter}!</span>` : `<span>NÍVEL ${summary.levelAfter}</span>`}${summary.tiersAfter > summary.tiersBefore ? `<span class="up">PASSE NÍVEL ${summary.tiersAfter} · RESGATE NO MENU</span>` : ''}`;
+  refreshProfileBadge();
   el('result-kicker').textContent = result.kicker;
   el('result-title').textContent = result.title;
   el('result-detail').textContent = result.detail;
@@ -514,6 +574,14 @@ function bindUI(): void {
   el('garage-button').addEventListener('click', () => { garageReturn = 'menu'; game.setMode('garage'); show('garage'); });
   el('online-button').addEventListener('click', () => { game.setMode('settings'); show('online'); });
   el('settings-button').addEventListener('click', () => { game.setMode('settings'); show('settings'); });
+  el('progress-button').addEventListener('click', () => { game.setMode('settings'); renderProgress(); show('progress'); });
+  document.querySelectorAll<HTMLButtonElement>('[data-ptab]').forEach((tab) => tab.addEventListener('click', () => {
+    progressTab = tab.dataset.ptab as typeof progressTab;
+    document.querySelectorAll('[data-ptab]').forEach((t) => t.classList.toggle('active', t === tab));
+    renderProgress();
+  }));
+  applyCosmetics();
+  refreshProfileBadge();
   el('credits-button').addEventListener('click', () => { game.setMode('settings'); show('credits'); });
   el('credits-button-mobile').addEventListener('click', () => { game.setMode('settings'); show('credits'); });
   document.querySelectorAll<HTMLButtonElement>('[data-back]').forEach((button) => button.addEventListener('click', () => {

@@ -40,6 +40,7 @@
               <button id="lobby-button" class="secondary-action lobby-action"><span class="action-number">◈</span><span>LOBBY / PREPARAR MISSÃO</span><span>↗</span></button>
               <button id="online-button" class="secondary-action online-action"><span class="action-number">02</span><span>ONLINE · TIMES / CORE</span><span>↗</span></button>
               <button id="garage-button" class="secondary-action"><span class="action-number">03</span><span>OFICINA / ARMAS</span><span>↗</span></button>
+              <button id="progress-button" class="secondary-action progress-action"><span class="action-number">★</span><span>PASSE · NÍVEL · LOJA</span><span id="menu-level">NV 1</span></button>
               <button id="settings-button" class="secondary-action"><span class="action-number">04</span><span>CONFIGURAÇÕES</span><span>↗</span></button>
               <button id="credits-button-mobile" class="secondary-action mobile-credits"><span class="action-number">05</span><span>CRÉDITOS DOS MODELOS</span><span>↗</span></button>
             </div>
@@ -122,6 +123,16 @@
         </div>
       </section>
 
+      <section id="progress" class="screen panel-screen progress-screen hidden">
+        <header class="panel-header"><button class="back-button" data-back>← VOLTAR</button><span>PROGRESSÃO // TEMPORADA 1</span><span id="progress-credits">0 CR</span></header>
+        <div class="progress-panel">
+          <div class="progress-head"><div><span class="eyebrow" id="progress-title">PILOTO</span><h2>NÍVEL <em id="progress-level">1</em></h2></div><div class="xp-box"><div class="xp-bar"><i id="xp-fill"></i></div><small id="xp-text">0 / 600 XP</small></div></div>
+          <p class="progress-note">Ganhe XP e créditos jogando treino e online. Tudo é obtido jogando, sem compras com dinheiro real. Os itens são só visuais.</p>
+          <div class="part-tabs progress-tabs" role="tablist"><button class="part-tab active" data-ptab="pass">PASSE DA TEMPORADA</button><button class="part-tab" data-ptab="shop">LOJA</button><button class="part-tab" data-ptab="equip">EQUIPADOS</button></div>
+          <div id="progress-body"></div>
+        </div>
+      </section>
+
       <section id="settings" class="screen panel-screen hidden">
         <header class="panel-header"><button class="back-button" data-back>← VOLTAR</button><span>CONFIGURAÇÕES // SISTEMA</span><span>V 0.3</span></header>
         <div class="settings-panel"><span class="eyebrow">AJUSTES DE COMBATE</span><h2>CONFIGURAÇÕES</h2>
@@ -162,7 +173,7 @@
       </div>
 
       <section id="pause" class="screen modal-screen hidden"><div class="modal-box"><span class="eyebrow" id="pause-kicker">SISTEMA EM ESPERA</span><h2>PAUSADO</h2><p id="pause-note" class="pause-note"></p><button id="resume-button" class="primary-action compact"><span class="action-icon">▶</span><span><small>VOLTAR À ARENA</small><strong>CONTINUAR</strong></span><span class="action-arrow">↗</span></button><button id="restart-button" class="secondary-action"><span class="action-number">↻</span><span>REINICIAR TREINO</span><span>↗</span></button><button id="pause-menu-button" class="secondary-action"><span class="action-number">↩</span><span>MENU PRINCIPAL</span><span>↗</span></button></div></section>
-      <section id="result" class="screen modal-screen hidden"><div class="modal-box result-box"><span class="eyebrow" id="result-kicker">TREINAMENTO CONCLUÍDO</span><h2 id="result-title">VITÓRIA</h2><p id="result-detail">Os drones foram eliminados.</p><div class="result-score"><span>PONTUAÇÃO</span><strong id="result-score">0</strong><small id="result-best"></small></div><div id="result-stats" class="result-stats"></div><button id="retry-button" class="primary-action compact"><span class="action-icon">▶</span><span><small>REINICIAR SIMULAÇÃO</small><strong>JOGAR DE NOVO</strong></span><span class="action-arrow">↗</span></button><button id="result-menu-button" class="secondary-action"><span class="action-number">↩</span><span>MENU PRINCIPAL</span><span>↗</span></button></div></section>
+      <section id="result" class="screen modal-screen hidden"><div class="modal-box result-box"><span class="eyebrow" id="result-kicker">TREINAMENTO CONCLUÍDO</span><h2 id="result-title">VITÓRIA</h2><p id="result-detail">Os drones foram eliminados.</p><div class="result-score"><span>PONTUAÇÃO</span><strong id="result-score">0</strong><small id="result-best"></small></div><div id="result-progress" class="result-progress"></div><div id="result-stats" class="result-stats"></div><button id="retry-button" class="primary-action compact"><span class="action-icon">▶</span><span><small>REINICIAR SIMULAÇÃO</small><strong>JOGAR DE NOVO</strong></span><span class="action-arrow">↗</span></button><button id="result-menu-button" class="secondary-action"><span class="action-number">↩</span><span>MENU PRINCIPAL</span><span>↗</span></button></div></section>
       <div id="toast" class="toast hidden"></div>
       <div id="rotate-hint" class="rotate-hint hidden">GIRE O APARELHO PARA UMA VISÃO MAIS AMPLA</div>
     </div>

@@ -45,6 +45,8 @@ export interface MechVisual {
   weapon: WeaponId;
   setPalette(palette: MechPalette): void;
   setWeapon(weapon: WeaponId): void;
+  /** Cosmetic weapon light colour (hex) or null for each weapon's own colour. */
+  setGlowOverride(hex: string | null): void;
   setParts(parts: MechPartConfig): void;
   restoreParts(): void;
   animate(dt: number, motion: number | MechMotion): void;
@@ -593,7 +595,7 @@ export function createMech(scene: Scene, palette: MechPalette, variant: MechVari
 
   const visual: MechVisual = {
     root, muzzle, weapon,
-    setPalette, setWeapon, setParts, restoreParts, animate, setShield, setCharge, setAlert, flashHit, kick, punch, land,
+    setPalette, setWeapon, setGlowOverride, setParts, restoreParts, animate, setShield, setCharge, setAlert, flashHit, kick, punch, land,
     breakApart, detachPart, loadShowcase, setShowcase, dispose,
   };
 
@@ -609,12 +611,14 @@ export function createMech(scene: Scene, palette: MechPalette, variant: MechVari
     visual.weapon = next;
     for (const [key, gun] of Object.entries(guns)) gun.node.setEnabled(key === next);
     muzzle.position.set(...guns[next].muzzle);
-    const color = Color3.FromHexString(WEAPON_GLOW[next]);
+    const color = Color3.FromHexString(glowOverride ?? WEAPON_GLOW[next]);
     weaponGlow.emissiveColor = color;
     weaponGlow.diffuseColor = color;
     normalWeaponGlow.copyFrom(color);
     charge = 0;
   }
+  let glowOverride: string | null = null;
+  function setGlowOverride(hex: string | null) { glowOverride = hex; setWeapon(visual.weapon); }
   setWeapon(weapon);
   setParts(DEFAULT_PARTS);
 

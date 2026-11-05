@@ -22,6 +22,15 @@ Jogo 3D de batalha de robôs no navegador, feito com **Babylon.js**, **TypeScrip
 - **30 GLBs no Triverse** não foram gerados: não há `TRIVERSE_API_KEY` nem acesso à conta neste ambiente. Plano e comandos em `docs/TRIVERSE_30_PARTS_PLAN.json`. O robô em jogo usa as peças procedurais (silhueta + cores + detalhes de cada família).
 - Gráficos: revisados por capturas (sem erros); não houve nova passada de materiais/iluminação além das peças de mapa. FPS em GPU real e jogo pela internet não foram testados.
 
+## Progressão, passe e loja (novo)
+
+- **Menu → PASSE · NÍVEL · LOJA** (`src/game/progression.ts`). Cada partida (treino ou online) dá **XP** (abates, ondas, vitória, pontuação) e **créditos do jogo**. Subir de nível dá bônus de créditos.
+- **Passe da Temporada 1**: 30 níveis gratuitos (800 XP cada) com créditos, títulos e efeitos; resgate na aba do passe.
+- **Loja**: 13 efeitos visuais comprados com créditos do jogo, alguns exigem nível: rastro do dash, efeito de abate e brilho das armas. A aba **Equipados** troca efeitos e título. **Não há compra com dinheiro real.** Itens são só visuais (não mudam combate), ficam salvos no navegador e aparecem só para você no online.
+- Armas com modelos mais detalhados (metralhadora rotativa de 6 canos com tambor, escopeta com respiros e freio de boca, laser com trilhos e lente, pod de mísseis 2×3 com sensor, espada com guarda de emissores, martelo com pistões e bocal de foguete).
+- Decorações temáticas fora da área de jogo em cada mapa (gelo e antenas; tanques e chaminés; prédios com letreiros e guindastes; pináculos e sondas de mineração), feitas com instâncias para pesar pouco.
+- Smoke: **68/68** checks, sem erros de console.
+
 ## Sempre no ar, atualização automática e PC sem placa de vídeo
 
 - `npm run live`: sobe o jogo + servidor online em http://localhost:5173/ e **reinicia sozinho** se cair (log em `artifacts/live.log`). O navegador recarrega a cada alteração no código do jogo; mudanças em `server/` ou `src/shared/` reiniciam o servidor online automaticamente.

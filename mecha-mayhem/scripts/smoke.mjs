@@ -155,7 +155,7 @@ check('mapas: cada arena tem coberturas centrais próprias', new Set(Object.valu
 const refinery = createArena(refineryLayout);
 check('segundo mapa: layout de refinaria tem pontes e coberturas', refinery.layout.visualAsset === 'procedural:refinery' && refinery.layout.bridges.length === 4 && refinery.staticCover.length > 8);
 function watch(page, label) {
-  page.on('pageerror', (error) => errors.push(`${label} PAGE: ${error.message}`));
+  page.on('pageerror', (error) => errors.push(`${label} PAGE: ${error.message} @ ${(error.stack ?? '').split('\n').slice(1, 4).join(' | ')}`));
   page.on('console', (message) => { if (message.type() === 'error') errors.push(`${label} CONSOLE: ${message.text()}`); });
   page.on('response', (response) => { if (response.status() >= 400) errors.push(`${label} HTTP ${response.status()}: ${response.url()}`); });
 }
@@ -310,6 +310,21 @@ try {
   await page.keyboard.press('Escape');
   await page.locator('#pause-menu-button').click();
   await page.locator('#menu').waitFor({ state: 'visible' });
+
+  // Progression: the finished match paid XP and credits; pass tiers can be claimed and items bought.
+  const prof = await page.evaluate(() => JSON.parse(localStorage.getItem('mecha-mayhem:profile') ?? '{}'));
+  check('progressão: partida concluída dá XP, créditos e nível do passe', prof.xp > 0 && prof.credits > 200 && prof.passXp > 0, `XP ${prof.xp} · ${prof.credits} CR`);
+  await page.locator('#progress-button').click();
+  await page.locator('#progress').waitFor({ state: 'visible' });
+  const readyTiers = await page.locator('.pass-tier.ready').count();
+  if (readyTiers) await page.locator('.pass-tier.ready').first().click();
+  await page.screenshot({ path: `${out}/progress-pass.png` });
+  await page.locator('[data-ptab="shop"]').click();
+  await page.locator('.shop-item[data-item="trail-magma"]').click();
+  const afterBuy = await page.evaluate(() => JSON.parse(localStorage.getItem('mecha-mayhem:profile')));
+  check('loja: compra com créditos do jogo e equipa o efeito', afterBuy.owned.includes('trail-magma') && afterBuy.equipped.trail === 'trail-magma' && (await game(page, () => window.__mecha.cosmetics.trail[0])) === 1);
+  await page.screenshot({ path: `${out}/progress-shop.png` });
+  await page.locator('#progress [data-back]').click();
 
   // ------------------------------------------------------------------- mobile
   const mobileContext = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
