@@ -18,6 +18,9 @@ import {
   Texture,
   TransformNode,
   Vector3,
+  InstancedMesh as InstancedMeshClass,
+  Material,
+  PBRMaterial,
 } from '@babylonjs/core';
 import '@babylonjs/loaders/glTF';
 import { type CustomMap, createArena, type Arena, type ArenaLayout, type Cover } from '../shared/arena';
@@ -85,6 +88,8 @@ export type World = {
   createSupplyCrate(): TransformNode;
   setTheme(theme: ThemeId): void;
   setQuality(quality: 'high' | 'medium' | 'low' | 'minimal'): void;
+  /** Re-apply the current quality to meshes created after it was set (spawned enemies, remote mechs). */
+  refreshQuality(): void;
   update(dt: number, time: number, cameraPosition: Vector3): void;
   dispose(): void;
 };
@@ -129,6 +134,52 @@ function instantiate(container: AssetContainer, name: string): TransformNode {
   for (const node of entries.rootNodes) node.parent = holder;
   for (const mesh of holder.getChildMeshes()) { mesh.isPickable = false; mesh.receiveShadows = true; }
   return holder;
+}
+
+/**
+ * Software rendering (no graphics card): PBR shading is the single biggest cost.
+ * In 'minimal' quality every PBR material is swapped for a cached StandardMaterial
+ * with the same albedo texture/colour and emissive; other qualities restore PBR.
+ */
+const cheapCache = new WeakMap<Material, StandardMaterial>();
+const originalMaterial = new WeakMap<AbstractMesh, Material>();
+const strippedStandard = new WeakMap<StandardMaterial, { bump: StandardMaterial['bumpTexture']; reflection: StandardMaterial['reflectionTexture'] }>();
+function setCheapMaterials(scene: Scene, cheap: boolean): void {
+  // Procedural armour: drop per-pixel relief and environment reflections, keep colour and paint.
+  for (const m of scene.materials) {
+    if (!(m instanceof StandardMaterial)) continue;
+    if (cheap && (m.bumpTexture || m.reflectionTexture)) {
+      strippedStandard.set(m, { bump: m.bumpTexture, reflection: m.reflectionTexture });
+      m.bumpTexture = null; m.reflectionTexture = null;
+    } else if (!cheap) {
+      const saved = strippedStandard.get(m);
+      if (saved) { m.bumpTexture = saved.bump; m.reflectionTexture = saved.reflection; strippedStandard.delete(m); }
+    }
+  }
+  for (const mesh of scene.meshes) {
+    if (mesh instanceof InstancedMeshClass) continue;
+    const current = mesh.material;
+    if (cheap) {
+      if (!(current instanceof PBRMaterial)) continue;
+      let simple = cheapCache.get(current);
+      if (!simple) {
+        simple = new StandardMaterial(`${current.name}-cheap`, scene);
+        simple.diffuseTexture = current.albedoTexture;
+        simple.diffuseColor = current.albedoTexture ? Color3.White() : current.albedoColor.clone();
+        simple.emissiveTexture = current.emissiveTexture;
+        simple.emissiveColor = current.emissiveColor.clone();
+        simple.specularColor = new Color3(0.12, 0.12, 0.12);
+        simple.alpha = current.alpha;
+        simple.backFaceCulling = current.backFaceCulling;
+        cheapCache.set(current, simple);
+      }
+      originalMaterial.set(mesh, current);
+      mesh.material = simple;
+    } else {
+      const original = originalMaterial.get(mesh);
+      if (original) { mesh.material = original; originalMaterial.delete(mesh); }
+    }
+  }
 }
 
 /** Load the Blender-authored arena and dress it with new cover, props, weather and lighting themes. */
@@ -689,12 +740,15 @@ export async function createWorld(scene: Scene, onProgress?: (label: string) => 
         box.material = hazard;
       }
       holder.scaling.setAll(0.42);
+      if (quality === 'minimal') setCheapMaterials(scene, true);
       for (const mesh of holder.getChildMeshes()) shadows.addShadowCaster(mesh);
       return holder;
     },
     setTheme(id) { applyTheme(id); },
+    refreshQuality() { if (quality === 'minimal') setCheapMaterials(scene, true); },
     setQuality(next) {
       quality = next;
+      setCheapMaterials(scene, next === 'minimal');
       shadows.mapSize = next === 'high' ? 2048 : next === 'minimal' ? 512 : 1024;
       shadows.filteringQuality = next === 'high' ? ShadowGenerator.QUALITY_MEDIUM : ShadowGenerator.QUALITY_LOW;
       graphics.setQuality(next);

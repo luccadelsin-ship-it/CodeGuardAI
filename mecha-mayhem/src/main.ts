@@ -79,6 +79,8 @@ function show(screen: UiScreen): void {
 type GraphicsLevel = 'high' | 'medium' | 'low' | 'minimal';
 let autoLevel: GraphicsLevel | null = null;
 let lowFps = 0;
+let dynLow = 0;
+let dynHigh = 0;
 let softwareRenderer = false;
 
 /** True when WebGL runs on the CPU (SwiftShader, llvmpipe, Microsoft Basic Render): no usable graphics card. */
@@ -710,7 +712,13 @@ function bindUI(): void {
   // Automatic mode also steps down when the frame rate stays low during combat.
   window.setInterval(() => {
     if (!autoLevel || currentScreen !== 'game') return;
-    lowFps = game.fps() < 22 ? lowFps + 1 : 0;
+    const fpsNow = game.fps();
+    lowFps = fpsNow < 22 ? lowFps + 1 : 0;
+    // Already at minimal: trade resolution for frame rate (and back when there is headroom).
+    if (autoLevel === 'minimal') {
+      if (fpsNow < 14) { if (++dynLow >= 3) { game.nudgeMinimalResolution(-1); dynLow = 0; } } else dynLow = 0;
+      if (fpsNow > 32) { if (++dynHigh >= 5) { game.nudgeMinimalResolution(1); dynHigh = 0; } } else dynHigh = 0;
+    }
     const order: GraphicsLevel[] = ['high', 'medium', 'low', 'minimal'];
     if (lowFps >= 5 && autoLevel !== 'minimal') {
       autoLevel = order[order.indexOf(autoLevel) + 1];

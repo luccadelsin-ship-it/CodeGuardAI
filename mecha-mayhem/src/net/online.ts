@@ -258,6 +258,7 @@ export class OnlineSession implements OnlineBridge {
     if (!r) {
       const visual = createMech(this.scene, info.palette, 'player', info.weapon);
       for (const mesh of visual.root.getChildMeshes()) this.game.world.shadows.addShadowCaster(mesh);
+      this.game.world.refreshQuality();
       r = { info, visual, buffer: [], position: visual.root.position.clone(), alive: true, hp: 100 };
       this.remotes.set(info.id, r);
     } else {

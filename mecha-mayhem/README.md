@@ -42,7 +42,8 @@ Jogo 3D de batalha de robôs no navegador, feito com **Babylon.js**, **TypeScrip
 
 - `npm run live`: sobe o jogo + servidor online em http://localhost:5173/ e **reinicia sozinho** se cair (log em `artifacts/live.log`). O navegador recarrega a cada alteração no código do jogo; mudanças em `server/` ou `src/shared/` reiniciam o servidor online automaticamente.
 - **Qualidade Automática** (padrão): detecta WebGL por software (SwiftShader, llvmpipe, "Microsoft Basic Render") e ativa a qualidade **Mínima** (meia resolução, sem sombras, brilho, pós-processamento, neblina e neve). Em combate, se o FPS ficar abaixo de 22 por 5 s, baixa um nível sozinho.
-- Medido neste ambiente sem GPU (SwiftShader, Doca Neon, 1280×720): **1,9 FPS na Alta → 11,4 FPS na Mínima**. Num PC real sem placa dedicada (gráfico integrado) o resultado tende a ser melhor, mas não foi medido.
+- Na Mínima, os materiais PBR (cenário GLB e objetos Sketchfab) viram materiais simples com a mesma textura, e os robôs perdem relevo por pixel e reflexos; inimigos que surgem depois recebem o mesmo tratamento. No modo Automático, se o FPS ficar abaixo de 14, a resolução da Mínima baixa sozinha (e sobe de volta quando sobra desempenho).
+- Medido neste ambiente sem GPU (SwiftShader, 1280×720, com 3 inimigos): Frozen **3,7–4,5 → 6,0 FPS** e Doca Neon **5,1–5,4 → 6,7 FPS** na Mínima após essa otimização. O processador deste ambiente é fraco e as medições variam ±1 FPS; num PC comum sem placa dedicada o número tende a ser maior, mas não foi medido. Num PC real sem placa dedicada (gráfico integrado) o resultado tende a ser melhor, mas não foi medido.
 - Mapas: plataformas de salto em quatro estações de cada arena (lançam ~3,8 m; regra compartilhada, vale no online) e coberturas nas pontes da Refinaria, Doca Neon e Cânion.
 - Smoke: **66/66** checks, sem erros de console.
 

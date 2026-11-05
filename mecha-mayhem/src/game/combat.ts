@@ -295,6 +295,17 @@ export class CombatGame {
 
   fps(): number { return this.engine.getFps(); }
 
+  /** Render resolution ratio used by 'minimal' quality; auto mode nudges it to hold a playable frame rate. */
+  private minimalRatio = 0.36;
+  private currentQuality: 'high' | 'medium' | 'low' | 'minimal' = 'high';
+  nudgeMinimalResolution(direction: -1 | 1): boolean {
+    const next = Math.max(0.24, Math.min(0.5, this.minimalRatio + direction * 0.04));
+    if (next === this.minimalRatio || this.currentQuality !== 'minimal') return false;
+    this.minimalRatio = next;
+    this.engine.setHardwareScalingLevel(window.devicePixelRatio / next);
+    return true;
+  }
+
   /** Numbers used by the progression system when a match ends. */
   matchStats(): { kills: number; waves: number } {
     return { kills: this.kills, waves: this.session === 'training' ? (this.waveActive ? this.waveIndex : this.waveIndex + 1) : 0 };
@@ -305,7 +316,8 @@ export class CombatGame {
    * resolution, no shadows, glow, bloom or post-processing, no snow, few particles.
    */
   setQuality(quality: 'high' | 'medium' | 'low' | 'minimal'): void {
-    const targetPixelRatio = quality === 'high' ? Math.min(window.devicePixelRatio, 1.5) : quality === 'medium' ? 1 : quality === 'low' ? 0.7 : 0.4;
+    this.currentQuality = quality;
+    const targetPixelRatio = quality === 'high' ? Math.min(window.devicePixelRatio, 1.5) : quality === 'medium' ? 1 : quality === 'low' ? 0.7 : this.minimalRatio;
     this.engine.setHardwareScalingLevel(window.devicePixelRatio / targetPixelRatio);
     this.scene.shadowsEnabled = quality === 'high' || quality === 'medium';
     this.glow.isEnabled = quality === 'high' || quality === 'medium';
@@ -1219,6 +1231,7 @@ export class CombatGame {
     const enemy = new Enemy(type, this.scene, position, DIFFICULTIES[this.difficulty]);
     if (enemy.mech) for (const mesh of enemy.root.getChildMeshes()) this.world.shadows.addShadowCaster(mesh);
     this.enemies.push(enemy);
+    this.world.refreshQuality();
     this.fx.pillar(position, ENEMY_DEFS[type].color, 1.2, type === 'wasp' ? 22 : 18);
     this.sfx.telegraph();
   }
