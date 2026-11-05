@@ -223,6 +223,84 @@ export async function createWorld(scene: Scene, onProgress?: (label: string) => 
     }
   }
 
+  // Map dressing: themed landmarks outside the playable decks (no collision needed),
+  // built from a few instanced templates so they stay cheap on software rendering.
+  const dressing = (() => {
+    const mat = (name: string, hex: string, emissive = false) => material(scene, `dress-${mapId}-${name}`, hex, emissive, 0.35);
+    const templates: Mesh[] = [];
+    const template = (mesh: Mesh, m: StandardMaterial) => { mesh.material = m; mesh.isPickable = false; mesh.setEnabled(false); templates.push(mesh); ownedMeshes.push(mesh); return mesh; };
+    const spinners: TransformNode[] = [];
+    const blinkers: StandardMaterial[] = [];
+    const spots: Array<{ x: number; z: number; a: number }> = [];
+    // Candidate ring positions that stay clear of every deck, bridge and station.
+    for (let ring = 0; ring < 2; ring++) {
+      const radius = 46 + ring * 16;
+      const count = 14 + ring * 6;
+      for (let i = 0; i < count; i++) {
+        const a = (i / count) * Math.PI * 2 + ring * 0.21;
+        const x = Math.cos(a) * radius, z = Math.sin(a) * radius;
+        if (!arena.onDeck(x, z, -6)) spots.push({ x, z, a });
+      }
+    }
+    const place = (t: Mesh, x: number, y: number, z: number, sx: number, sy: number, sz: number, ry = 0) => {
+      const inst = t.createInstance(`${t.name}-i`);
+      inst.position.set(x, y, z); inst.scaling.set(sx, sy, sz); inst.rotation.y = ry; inst.isPickable = false;
+      return inst;
+    };
+    const ground = -0.2;
+    if (mapId === 'frozen') {
+      const ice = template(MeshBuilder.CreateCylinder('dress-ice', { diameterTop: 0, diameterBottom: 1, height: 1, tessellation: 6 }, scene), mat('ice', '#bfe6f5'));
+      const mast = template(MeshBuilder.CreateCylinder('dress-mast', { diameter: 1, height: 1, tessellation: 6 }, scene), mat('mast', '#2a3a46'));
+      const lamp = mat('lamp', '#ff5a3c', true); blinkers.push(lamp);
+      const light = template(MeshBuilder.CreateSphere('dress-lamp', { diameter: 1, segments: 6 }, scene), lamp);
+      spots.forEach((p, i) => {
+        if (i % 3 === 0) { place(mast, p.x, ground + 9, p.z, 0.35, 18, 0.35); place(light, p.x, ground + 18.3, p.z, 0.7, 0.7, 0.7); }
+        else { const h = 6 + (i * 37 % 9); place(ice, p.x, ground + h / 2, p.z, 2.4 + (i % 3), h, 2.4 + (i % 2)); place(ice, p.x + 2.2, ground + h * 0.3, p.z + 1.3, 1.4, h * 0.6, 1.4); }
+      });
+    } else if (mapId === 'refinery') {
+      const tank = template(MeshBuilder.CreateCylinder('dress-tank', { diameter: 1, height: 1, tessellation: 16 }, scene), mat('tank', '#8d969c'));
+      const band = template(MeshBuilder.CreateCylinder('dress-band', { diameter: 1, height: 1, tessellation: 16 }, scene), mat('band', '#c9622a'));
+      const stack = template(MeshBuilder.CreateCylinder('dress-stack', { diameterTop: 0.8, diameterBottom: 1, height: 1, tessellation: 10 }, scene), mat('stack', '#3a4148'));
+      const flame = mat('flame', '#ffb14a', true); blinkers.push(flame);
+      const tip = template(MeshBuilder.CreateCylinder('dress-flare', { diameterTop: 0, diameterBottom: 1, height: 1, tessellation: 8 }, scene), flame);
+      const pipe = template(MeshBuilder.CreateCylinder('dress-pipe', { diameter: 1, height: 1, tessellation: 8 }, scene), mat('pipe', '#5c6670'));
+      spots.forEach((p, i) => {
+        if (i % 4 === 0) { place(stack, p.x, ground + 14, p.z, 2.2, 28, 2.2); place(tip, p.x, ground + 29, p.z, 1.3, 2.2, 1.3); }
+        else if (i % 2 === 0) { place(tank, p.x, ground + 5, p.z, 9, 10, 9); place(band, p.x, ground + 7.5, p.z, 9.2, 0.6, 9.2); place(band, p.x, ground + 2.5, p.z, 9.2, 0.6, 9.2); }
+        else { const pp = place(pipe, p.x, ground + 1.6, p.z, 1.1, 14, 1.1, p.a); pp.rotation.z = Math.PI / 2; }
+      });
+    } else if (mapId === 'neon') {
+      const tower = template(MeshBuilder.CreateBox('dress-tower', { size: 1 }, scene), mat('tower', '#141a33'));
+      const signs = [mat('sign-pink', '#ff4fd8', true), mat('sign-cyan', '#3ff0ff', true), mat('sign-amber', '#ffb84a', true)];
+      blinkers.push(...signs);
+      const signT = signs.map((m, k) => template(MeshBuilder.CreateBox(`dress-sign-${k}`, { size: 1 }, scene), m));
+      const crane = template(MeshBuilder.CreateBox('dress-crane', { size: 1 }, scene), mat('crane', '#f0b83a'));
+      spots.forEach((p, i) => {
+        const h = 14 + (i * 13 % 20);
+        const face = Math.atan2(-p.x, -p.z);
+        place(tower, p.x, ground + h / 2, p.z, 5, h, 5, face);
+        place(signT[i % 3], p.x - Math.sin(face) * -2.6, ground + h * 0.7, p.z - Math.cos(face) * -2.6, 3.6, 1.2, 0.15, face);
+        if (i % 5 === 0) { place(crane, p.x, ground + h + 4, p.z, 0.6, 8, 0.6); const arm = place(crane, p.x, ground + h + 8, p.z, 0.5, 0.5, 12, face); spinners.push(arm); }
+      });
+    } else {
+      const spire = template(MeshBuilder.CreateCylinder('dress-spire', { diameterTop: 0.35, diameterBottom: 1, height: 1, tessellation: 7 }, scene), mat('rock', '#a86a42'));
+      const rig = template(MeshBuilder.CreateBox('dress-rig', { size: 1 }, scene), mat('rig', '#4a3d34'));
+      const drill = template(MeshBuilder.CreateCylinder('dress-drill', { diameterTop: 0, diameterBottom: 1, height: 1, tessellation: 8 }, scene), mat('drill', '#d8c39a'));
+      const glow = mat('ore-glow', '#ffb347', true); blinkers.push(glow);
+      const ore = template(MeshBuilder.CreateBox('dress-ore', { size: 1 }, scene), glow);
+      spots.forEach((p, i) => {
+        if (i % 3 === 0) { place(rig, p.x, ground + 7, p.z, 3, 14, 3); const d = place(drill, p.x, ground + 15.5, p.z, 2.4, 3, 2.4); d.rotation.x = Math.PI; spinners.push(d); }
+        else { const h = 9 + (i * 23 % 14); place(spire, p.x, ground + h / 2, p.z, 6 + (i % 3), h, 5 + (i % 2), p.a); place(ore, p.x + 3, ground + 0.6, p.z - 1.5, 1.4, 1.2, 1.1, i); }
+      });
+    }
+    return {
+      update(dt: number, time: number) {
+        for (const node of spinners) node.rotation.y += dt * 0.6;
+        blinkers.forEach((m, i) => { m.emissiveColor = m.diffuseColor.scale(0.65 + 0.35 * Math.max(0, Math.sin(time * (1.6 + i * 0.7) + i))); });
+      },
+    };
+  })();
+
   const graphics = createWorldGraphics(scene, layout, mapId);
 
   // Invisible Havok proxies, as in the original build.
@@ -621,6 +699,7 @@ export async function createWorld(scene: Scene, onProgress?: (label: string) => 
       applySnow();
     },
     update(dt, time, cameraPosition) {
+      dressing.update(dt, time);
       snowOrigin.set(cameraPosition.x, Math.max(deckY, cameraPosition.y - 6), cameraPosition.z);
       const pulse = 0.55 + 0.45 * Math.sin(time * 2.4);
       for (const ring of padRings) {

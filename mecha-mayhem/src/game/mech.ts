@@ -267,76 +267,126 @@ export function createMech(scene: Scene, palette: MechPalette, variant: MechVari
   const muzzle = new TransformNode(`${id}-muzzle`, scene);
   const guns = {} as Record<WeaponId, { node: TransformNode; muzzle: [number, number, number] }>;
   const coils: Mesh[] = [];
+  // Tapered piece (blade tips, nozzles): a cylinder with a different top diameter.
+  function taper(name: string, parent: TransformNode, bottom: number, top: number, height: number, pos: [number, number, number], mat: StandardMaterial, rotation: [number, number, number] = [Math.PI / 2, 0, 0], sides = 8): Mesh {
+    const mesh = MeshBuilder.CreateCylinder(`${id}-${name}`, { diameterBottom: bottom, diameterTop: top, height, tessellation: sides }, scene);
+    mesh.parent = parent;
+    mesh.position.set(...pos);
+    mesh.rotation.set(...rotation);
+    mesh.material = mat;
+    mesh.isPickable = false;
+    return mesh;
+  }
+  const X: [number, number, number] = [Math.PI / 2, 0, 0];
   {
+    // MK I rotary machine gun: six-barrel cluster, heat-sink fins, ammo drum and feed belt.
     const mg = new TransformNode(`${id}-machine-gun`, scene);
     mg.parent = gunMount!;
     cube('gun-body', mg, [.38, .31, .69], [0, 0, .33], gunMetal);
     cube('gun-upper-cover', mg, [.43, .10, .56], [0, .19, .27], armor);
-    cube('gun-side-magazine', mg, [.17, .31, .28], [.31, -.09, .15], dark);
-    cube('gun-ammo-light', mg, [.025, .12, .17], [.41, -.08, .15], armorEdge);
+    for (let i = 0; i < 4; i++) cube(`gun-fin-${i}`, mg, [.34, .05, .035], [0, .265, .1 + i * .11], dark);
+    cyl('gun-drum', mg, .36, .2, [.33, -.1, .14], dark, [0, 0, Math.PI / 2], 14);
+    cyl('gun-drum-cap', mg, .26, .03, [.44, -.1, .14], armorEdge, [0, 0, Math.PI / 2], 14);
+    for (let i = 0; i < 4; i++) cube(`gun-belt-${i}`, mg, [.07, .05, .06], [.2 - i * .04, -.2 + i * .03, .28 + i * .06], armorEdge);
+    cube('gun-ammo-light', mg, [.025, .12, .17], [.47, -.08, .15], weaponGlow);
     const barrels = new TransformNode(`${id}-mg-barrels`, scene);
     barrels.parent = mg;
     barrels.position.z = .83;
-    for (const x of [-.12, .12]) for (const y of [-.075, .075]) {
-      cyl(`barrel-${x}-${y}`, barrels, .075, .55, [x, y, 0], dark, [Math.PI / 2, 0, 0], 8);
-      cyl(`barrel-tip-${x}-${y}`, barrels, .10, .09, [x, y, .27], gunMetal, [Math.PI / 2, 0, 0], 8);
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      const x = Math.cos(a) * .11, y = Math.sin(a) * .11;
+      cyl(`barrel-${i}`, barrels, .06, .62, [x, y, .02], dark, X, 8);
+      cyl(`barrel-tip-${i}`, barrels, .085, .07, [x, y, .32], gunMetal, X, 8);
     }
-    cyl('barrel-ring', mg, .39, .08, [0, 0, .77], armorEdge, [Math.PI / 2, 0, 0], 12);
-    cube('gun-optic', mg, [.16, .13, .27], [0, .29, .19], dark);
-    cube('gun-optic-light', mg, [.10, .055, .04], [0, .30, .345], weaponGlow);
+    cyl('barrel-spindle', barrels, .07, .66, [0, 0, 0], gunMetal, X, 8);
+    cyl('barrel-clamp', barrels, .34, .06, [0, 0, .18], armor, X, 12);
+    cyl('barrel-ring', mg, .39, .08, [0, 0, .77], armorEdge, X, 12);
+    cube('gun-optic', mg, [.16, .13, .27], [0, .3, .19], dark);
+    cyl('gun-optic-lens', mg, .1, .03, [0, .3, .335], weaponGlow, X, 12);
+    cube('gun-rail', mg, [.06, .04, .5], [-.21, .05, .35], armorEdge);
     guns.mg = { node: mg, muzzle: [0, 0, 1.18] };
     (mg as TransformNode & { spin?: TransformNode }).spin = barrels;
 
+    // Breacher shotgun: twin vented barrels, muzzle brake, pump grip with ridges, side shell rack.
     const sg = new TransformNode(`${id}-shotgun`, scene);
     sg.parent = gunMount!;
     cube('sg-receiver', sg, [.46, .36, .62], [0, 0, .26], gunMetal);
-    cube('sg-shell-box', sg, [.2, .28, .34], [.33, -.04, .2], armorEdge);
+    cube('sg-receiver-plate', sg, [.48, .08, .5], [0, .2, .24], armor);
+    cube('sg-shell-rack', sg, [.12, .24, .36], [.3, -.03, .2], dark);
+    for (let i = 0; i < 4; i++) cyl(`sg-shell-${i}`, sg, .06, .14, [.37, -.03 + (i % 2) * .08, .1 + Math.floor(i / 2) * .18], armorEdge, [0, 0, Math.PI / 2], 8);
     for (const x of [-.11, .11]) {
-      cyl(`sg-barrel-${x}`, sg, .17, .78, [x, .04, .88], dark, [Math.PI / 2, 0, 0], 10);
-      cyl(`sg-bore-${x}`, sg, .1, .03, [x, .04, 1.27], weaponGlow, [Math.PI / 2, 0, 0], 10);
+      cyl(`sg-barrel-${x}`, sg, .17, .78, [x, .04, .88], dark, X, 10);
+      for (let k = 0; k < 3; k++) cyl(`sg-vent-${x}-${k}`, sg, .2, .04, [x, .04, .66 + k * .17], gunMetal, X, 10);
+      cyl(`sg-bore-${x}`, sg, .1, .03, [x, .04, 1.29], weaponGlow, X, 10);
     }
+    cube('sg-brake', sg, [.48, .24, .12], [0, .04, 1.24], armorEdge);
     cube('sg-pump', sg, [.36, .14, .34], [0, -.18, .72], armor);
-    cube('sg-top-rail', sg, [.12, .07, .7], [0, .22, .55], armor);
-    guns.shotgun = { node: sg, muzzle: [0, .04, 1.3] };
+    for (let k = 0; k < 3; k++) cube(`sg-pump-ridge-${k}`, sg, [.38, .03, .04], [0, -.25, .62 + k * .1], dark);
+    cube('sg-top-rail', sg, [.12, .07, .7], [0, .26, .55], armor);
+    cube('sg-sight', sg, [.05, .08, .05], [0, .33, .88], weaponGlow);
+    guns.shotgun = { node: sg, muzzle: [0, .04, 1.32] };
 
+    // Lance laser cannon: capacitor bank, rails framing the coil stack, cooling fins and a lens.
     const lz = new TransformNode(`${id}-laser`, scene);
     lz.parent = gunMount!;
     cube('lz-capacitor', lz, [.34, .34, .58], [0, 0, .22], gunMetal);
-    cube('lz-cell', lz, [.08, .22, .4], [.21, .02, .2], weaponGlow);
-    cyl('lz-barrel', lz, .13, 1.25, [0, .02, 1.0], dark, [Math.PI / 2, 0, 0], 10);
+    for (let k = 0; k < 3; k++) cube(`lz-cell-${k}`, lz, [.06, .2, .1], [.2, .02, .06 + k * .14], weaponGlow);
+    for (let k = 0; k < 5; k++) cube(`lz-fin-${k}`, lz, [.42, .03, .05], [0, .19, .02 + k * .1], dark);
+    cyl('lz-barrel', lz, .13, 1.25, [0, .02, 1.0], dark, X, 10);
+    for (const y of [-.17, .21]) cube(`lz-rail-${y}`, lz, [.06, .05, 1.05], [0, y, 1.0], armor);
     for (let i = 0; i < 4; i++) {
-      const coil = cyl(`lz-coil-${i}`, lz, .27 - i * .025, .07, [0, .02, .62 + i * .22], weaponGlow, [Math.PI / 2, 0, 0], 14);
+      const coil = cyl(`lz-coil-${i}`, lz, .27 - i * .025, .07, [0, .02, .62 + i * .22], weaponGlow, X, 14);
       coils.push(coil);
     }
-    cyl('lz-tip', lz, .2, .08, [0, .02, 1.6], armorEdge, [Math.PI / 2, 0, 0], 10);
+    cyl('lz-tip', lz, .2, .08, [0, .02, 1.6], armorEdge, X, 10);
+    cyl('lz-lens', lz, .12, .03, [0, .02, 1.65], whiteGlow, X, 12);
     guns.laser = { node: lz, muzzle: [0, .02, 1.68] };
 
+    // Hornet missile pod: 2×3 tube grid with frame, lock-on sensor dish and rear exhaust vents.
     const ms = new TransformNode(`${id}-missile-pod`, scene);
     ms.parent = gunMount!;
-    cube('ms-pod', ms, [.62, .54, .78], [0, .06, .38], gunMetal);
-    cube('ms-pod-armor', ms, [.66, .12, .7], [0, .37, .36], armor);
-    for (const x of [-.15, .15]) for (const y of [-.07, .19]) {
-      cyl(`ms-tube-${x}-${y}`, ms, .19, .06, [x, y, .78], dark, [Math.PI / 2, 0, 0], 10);
-      cyl(`ms-warhead-${x}-${y}`, ms, .09, .04, [x, y, .8], weaponGlow, [Math.PI / 2, 0, 0], 8);
+    cube('ms-pod', ms, [.66, .58, .78], [0, .06, .38], gunMetal);
+    cube('ms-pod-armor', ms, [.7, .12, .72], [0, .4, .36], armor);
+    cube('ms-frame-v', ms, [.04, .58, .05], [0, .06, .78], dark);
+    for (const x of [-.2, 0.0, .2]) for (const y of [-.08, .2]) {
+      if (x === 0) continue;
+      cyl(`ms-tube-${x}-${y}`, ms, .17, .06, [x, y, .78], dark, X, 10);
+      taper(`ms-warhead-${x}-${y}`, ms, .11, .02, .1, [x, y, .82], weaponGlow, X, 8);
     }
-    cube('ms-side-light', ms, [.03, .1, .4], [.33, .1, .35], armorEdge);
-    guns.missile = { node: ms, muzzle: [0, .06, .9] };
+    for (const y of [-.08, .2]) { cyl(`ms-tube-mid-${y}`, ms, .17, .06, [0, y, .79], dark, X, 10); taper(`ms-warhead-mid-${y}`, ms, .11, .02, .1, [0, y, .83], weaponGlow, X, 8); }
+    cyl('ms-dish', ms, .22, .04, [.36, .3, .5], armorEdge, [0, 0, Math.PI / 2], 12);
+    cyl('ms-dish-eye', ms, .07, .05, [.39, .3, .5], weaponGlow, [0, 0, Math.PI / 2], 8);
+    for (let k = 0; k < 3; k++) cube(`ms-exhaust-${k}`, ms, [.5, .04, .04], [0, -.08 + k * .14, -.02], dark);
+    guns.missile = { node: ms, muzzle: [0, .06, .92] };
 
+    // Arc energy sword: wrapped grip, pronged emitter guard, tapered blade with a bright core.
     const sword = new TransformNode(`${id}-energy-sword`, scene);
     sword.parent = gunMount!;
     cube('sword-grip', sword, [.2, .22, .63], [0, -.02, .23], gunMetal);
+    for (let k = 0; k < 4; k++) cyl(`sword-wrap-${k}`, sword, .25, .04, [0, -.02, .02 + k * .13], dark, X, 8);
+    cyl('sword-pommel', sword, .2, .1, [0, -.02, -.1], armorEdge, X, 8);
     cube('sword-guard', sword, [.55, .12, .18], [0, 0, .59], armorEdge);
-    cube('sword-blade-core', sword, [.10, .08, 1.55], [0, .02, 1.43], whiteGlow);
-    cube('sword-blade-glow', sword, [.22, .14, 1.52], [0, .02, 1.43], weaponGlow);
-    guns.sword = { node: sword, muzzle: [0, .02, 2.22] };
+    for (const side of [-1, 1]) cube(`sword-prong-${side}`, sword, [.06, .08, .22], [side * .24, 0, .74], armor, [0, side * -.25, 0]);
+    cube('sword-blade-core', sword, [.08, .06, 1.42], [0, .02, 1.38], whiteGlow);
+    cube('sword-blade-glow', sword, [.2, .12, 1.4], [0, .02, 1.38], weaponGlow);
+    taper('sword-tip', sword, .2, 0, .32, [0, .02, 2.24], weaponGlow, X, 4);
+    guns.sword = { node: sword, muzzle: [0, .02, 2.32] };
 
+    // Quake mechanical hammer: wrapped haft, pistons and a rocket nozzle on the back of the head.
     const hammer = new TransformNode(`${id}-mechanical-hammer`, scene);
     hammer.parent = gunMount!;
     cube('hammer-grip', hammer, [.22, .24, 1.43], [0, 0, .67], gunMetal);
+    for (let k = 0; k < 3; k++) cyl(`hammer-wrap-${k}`, hammer, .28, .05, [0, 0, .08 + k * .14], dark, X, 8);
     cube('hammer-head', hammer, [.95, .45, .52], [0, 0, 1.45], armor);
+    cube('hammer-head-band', hammer, [.98, .48, .08], [0, 0, 1.3], dark);
     cube('hammer-impact-face', hammer, [1.02, .48, .10], [0, 0, 1.77], dark);
+    for (const x of [-.3, 0, .3]) for (const y of [-.12, .12]) cube(`hammer-stud-${x}-${y}`, hammer, [.1, .1, .06], [x, y, 1.84], gunMetal);
+    for (const x of [-.32, .32]) cyl(`hammer-piston-${x}`, hammer, .12, .36, [x, .27, 1.38], gunMetal, X, 8);
+    taper('hammer-nozzle', hammer, .3, .18, .22, [0, 0, 1.14], dark, [-Math.PI / 2, 0, 0], 10);
+    cyl('hammer-nozzle-glow', hammer, .16, .02, [0, 0, 1.02], weaponGlow, X, 10);
     cube('hammer-energy', hammer, [.65, .055, .56], [0, .25, 1.45], weaponGlow);
-    guns.hammer = { node: hammer, muzzle: [0, 0, 1.7] };
+    for (const side of [-1, 1]) cube(`hammer-vent-${side}`, hammer, [.04, .22, .3], [side * .49, 0, 1.45], weaponGlow);
+    guns.hammer = { node: hammer, muzzle: [0, 0, 1.75] };
   }
   muzzle.parent = gunMount!;
 
