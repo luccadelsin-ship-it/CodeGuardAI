@@ -90,6 +90,8 @@ export type World = {
   setQuality(quality: 'high' | 'medium' | 'low' | 'minimal'): void;
   /** Re-apply the current quality to meshes created after it was set (spawned enemies, remote mechs). */
   refreshQuality(): void;
+  /** How many static meshes were merged (diagnostics). */
+  mergedStatic?: number;
   update(dt: number, time: number, cameraPosition: Vector3): void;
   dispose(): void;
 };
@@ -781,5 +783,37 @@ export async function createWorld(scene: Scene, onProgress?: (label: string) => 
       snow.dispose();
     },
   };
+  // Fewer draw calls: merge static, non-animated scenery that shares a material.
+  // Animated pieces (beacons, jump-pad rings, barrels), quality-dependent detail
+  // (graphics-*), imported GLB props and invisible colliders are left alone.
+  world.mergedStatic = mergeStaticScenery(scene, shadows, ownedMeshes, mapId);
   return world;
+}
+
+function mergeStaticScenery(scene: Scene, shadows: ShadowGenerator, owned: AbstractMesh[], mapId: string): number {
+  const staticName = new RegExp(`^(${mapId}-(platform|rim|bridge|rail|cover|cover-light|yard-foundation|tower-foundation)|barricade|block|wall|pillar|pipe|dais|ore|jump-pad-\\d|jump-pad-core)`);
+  const casters = new Set(shadows.getShadowMap()?.renderList ?? []);
+  const groups = new Map<string, Mesh[]>();
+  for (const m of scene.meshes) {
+    if (!(m instanceof Mesh) || m instanceof InstancedMeshClass || !m.isEnabled() || !m.isVisible || !m.material || m.skeleton || m.getTotalVertices() === 0) continue;
+    if (!staticName.test(m.name) || /beacon|ring|warning/.test(m.name) || m.hasInstances || m.getChildren().length) continue;
+    const key = `${m.material.uniqueId}:${casters.has(m) ? 1 : 0}`;
+    (groups.get(key) ?? groups.set(key, []).get(key)!).push(m);
+  }
+  let merged = 0;
+  for (const group of groups.values()) {
+    if (group.length < 2) continue;
+    try {
+      const caster = casters.has(group[0]);
+      const result = Mesh.MergeMeshes(group, true, true, undefined, false, false);
+      if (!result) continue;
+      result.isPickable = false;
+      result.receiveShadows = true;
+      result.freezeWorldMatrix();
+      if (caster) shadows.addShadowCaster(result);
+      owned.push(result);
+      merged += group.length;
+    } catch { /* incompatible vertex data: keep the originals */ }
+  }
+  return merged;
 }

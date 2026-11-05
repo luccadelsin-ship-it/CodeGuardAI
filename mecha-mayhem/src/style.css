@@ -168,3 +168,7 @@ body.touch-mode .hud-bottom-left .hud-value strong{font-size:22px}
 @media(max-width:800px){.editor-panel{grid-template-columns:1fr;grid-template-rows:auto auto;overflow-y:auto;left:12px;right:12px}.editor-canvas-wrap{order:-1}.editor-canvas-wrap canvas{width:100%}}
 .hub-screen .hub-mode.menu-intel{display:block!important}
 @media(max-height:500px){.hub-screen .hub-mode .intel-body,.hub-screen .hub-mode .intel-header{display:none}.hub-screen .hub-mode{width:min(300px,60vw);bottom:34px}.hub-top{height:52px}}
+/* beginner tips */
+.tip{position:absolute;left:50%;top:132px;transform:translateX(-50%);width:min(560px,92vw);display:flex;align-items:center;gap:12px;padding:10px 12px 10px 14px;background:rgba(3,15,26,.9);border:1px solid #ffd23f;border-left-width:4px;pointer-events:auto;z-index:7;box-shadow:0 10px 30px #0007}
+.tip-step{flex:none;font:800 13px/1 "Barlow Condensed",sans-serif;color:#ffd23f;letter-spacing:.08em}.tip p{margin:0;flex:1;font-size:15px;line-height:1.35;color:#e9f6ff}.tip b{color:#ffd23f}.tip button{flex:none;background:none;border:0;color:#8fb3c4;font-size:10px;font-weight:700;letter-spacing:.1em}.tip button:hover{color:#fff}
+@media(max-width:600px){.tip{top:174px;gap:8px;padding:8px 10px}.tip p{font-size:13px}.tip-step{display:none}}

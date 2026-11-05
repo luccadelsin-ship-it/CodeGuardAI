@@ -47,6 +47,9 @@ Jogo 3D de batalha de robôs no navegador, feito com **Babylon.js**, **TypeScrip
 - Mapas: plataformas de salto em quatro estações de cada arena (lançam ~3,8 m; regra compartilhada, vale no online) e coberturas nas pontes da Refinaria, Doca Neon e Cânion.
 - Smoke: **66/66** checks, sem erros de console.
 
+- **Menos chamadas de desenho:** peças fixas do cenário que usam o mesmo material (pisos, bordas, pontes, trilhos, coberturas, blocos, plataformas de salto) são unidas num só objeto ao carregar o mapa. Doca Neon: **358 → 199** chamadas por quadro; Cânion: 190. Ajuda sobretudo em vídeo integrado fraco.
+- **Dicas para iniciantes:** na primeira partida de treino aparecem 6 dicas curtas (andar, mirar e atirar, dash e salto, trocar arma, plataformas de salto, cobertura e suprimentos). Cada uma avança quando você faz a ação, se adapta a teclado ou toque e pode ser pulada.
+
 ## Executar
 
 Requer Node.js 22.18 ou mais novo (o servidor roda TypeScript direto pelo Node).

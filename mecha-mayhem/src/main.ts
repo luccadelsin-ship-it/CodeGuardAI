@@ -459,6 +459,37 @@ function renderProgress(): void {
   }
 }
 
+/** Beginner tips: shown in the first training match, each step advances when the player does it. */
+const TIPS: Array<{ key: (touchMode: boolean) => string; done: () => boolean; minTime?: number }> = [
+  { key: (t) => t ? 'Arraste o polegar na <b>metade esquerda</b> para andar. Empurre até o fim para correr.' : 'Ande com <b>W A S D</b>. Segure <b>Shift</b> para correr.', done: () => game.signals.moved > 6 },
+  { key: (t) => t ? 'Arraste na <b>metade direita</b> para mirar e segure <b>FOGO</b> para atirar.' : 'Mire com o <b>mouse</b> e atire com <b>clique</b> ou <b>J</b>.', done: () => game.shotsFired() > 3 },
+  { key: (t) => t ? 'Toque em <b>DASH</b> para esquivar (reduz o dano) e em <b>SALTO</b>; segure no ar para o jato.' : '<b>Q</b> faz dash e reduz o dano. <b>Espaço</b> pula; segure no ar para o jato.', done: () => game.signals.dashed || game.signals.jumped, minTime: 2 },
+  { key: (t) => t ? 'Toque em <b>ARMA</b> para trocar entre as 6 armas.' : '<b>1 a 6</b> trocam a arma. <b>K</b> espada, <b>L</b> martelo, <b>F</b> soco.', done: () => game.signals.switched, minTime: 2 },
+  { key: () => 'Os <b>anéis azuis no chão</b> são plataformas de salto: pise para subir nas coberturas.', done: () => game.signals.pad, minTime: 8 },
+  { key: () => 'Fique atrás de coberturas. Entre as ondas caem <b>caixas verdes</b> que reparam vida e membros.', done: () => false, minTime: 7 },
+];
+let tipIndex = -1;
+let tipShownAt = 0;
+function tipsDone(): boolean { return loadSetting('tips-done', '0') === '1'; }
+function finishTips(): void { saveSetting('tips-done', '1'); tipIndex = -1; el('tip').classList.add('hidden'); }
+function updateTips(): void {
+  if (tipIndex < 0) {
+    if (tipsDone() || currentScreen !== 'game' || game.session !== 'training') return;
+    tipIndex = 0; tipShownAt = performance.now();
+  }
+  if (currentScreen !== 'game' || game.session !== 'training') { el('tip').classList.add('hidden'); return; }
+  const tip = TIPS[tipIndex];
+  const elapsed = (performance.now() - tipShownAt) / 1000;
+  if ((tip.done() && elapsed > 1.2) || (tip.minTime !== undefined && elapsed > tip.minTime + (tip.done() ? 0 : 6))) {
+    tipIndex++;
+    tipShownAt = performance.now();
+    if (tipIndex >= TIPS.length) { finishTips(); toast('DICAS CONCLUÍDAS · BOA CAÇADA!'); return; }
+  }
+  el('tip').classList.remove('hidden');
+  el('tip-step').textContent = `DICA ${tipIndex + 1}/${TIPS.length}`;
+  el('tip-text').innerHTML = TIPS[tipIndex].key(document.body.classList.contains('touch-mode'));
+}
+
 function showResult(result: ResultInfo): void {
   const stats = game.matchStats();
   const summary = awardMatch(profile, { score: result.score, kills: stats.kills, won: result.won, waves: stats.waves, online: game.session === 'online' });
@@ -595,6 +626,8 @@ function bindUI(): void {
   el('garage-button').addEventListener('click', () => { garageReturn = 'menu'; game.setMode('garage'); show('garage'); });
   el('online-button').addEventListener('click', () => { game.setMode('settings'); show('online'); });
   el('settings-button').addEventListener('click', () => { game.setMode('settings'); show('settings'); });
+  el('tip-skip').addEventListener('click', finishTips);
+  window.setInterval(updateTips, 250);
   el('progress-button').addEventListener('click', () => { game.setMode('settings'); renderProgress(); show('progress'); });
   document.querySelectorAll<HTMLButtonElement>('[data-ptab]').forEach((tab) => tab.addEventListener('click', () => {
     progressTab = tab.dataset.ptab as typeof progressTab;

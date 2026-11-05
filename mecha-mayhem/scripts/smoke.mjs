@@ -242,6 +242,12 @@ try {
   await game(page, () => window.__mecha.debugStep(0.6));
   await page.keyboard.up('Space');
   const moved = await state(page);
+  let tip = { visible: false, step: '' };
+  for (let i = 0; i < 10 && !(tip.visible && !tip.step.startsWith('DICA 1/')); i++) {
+    await page.waitForTimeout(500);
+    tip = await page.evaluate(() => ({ visible: !document.getElementById('tip').classList.contains('hidden'), step: document.getElementById('tip-step').textContent }));
+  }
+  check('dicas para iniciantes aparecem e avançam com as ações', tip.visible && !tip.step.startsWith('DICA 1/'), tip.step);
   check('treino: movimento, dash, escudo e jato', Math.hypot(moved.player[0] - start.player[0], moved.player[2] - start.player[2]) > 3 && moved.energy < 100, `pos ${moved.player.join(', ')} · energia ${Math.round(moved.energy)}`);
   await game(page, () => window.__mecha.debugStep(3));
   const wave1 = await state(page);

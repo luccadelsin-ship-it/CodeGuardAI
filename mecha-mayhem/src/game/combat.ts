@@ -275,7 +275,11 @@ export class CombatGame {
     if (this.mode !== 'game') this.state = createMechState(this.state.x, this.state.y, this.state.z, this.yaw, this.weapon, this.chassis);
   }
 
+  /** What the player has already done this session (beginner tips advance on these). */
+  signals = { moved: 0, dashed: false, jumped: false, pad: false, switched: false };
+
   setWeapon(weapon: WeaponId): void {
+    if (this.mode === 'game' && weapon !== this.weapon) this.signals.switched = true;
     if (this.keyboardAttack?.weapon !== weapon) this.keyboardAttack = null;
     this.weapon = weapon;
     this.player.setWeapon(weapon);
@@ -294,6 +298,7 @@ export class CombatGame {
   }
 
   fps(): number { return this.engine.getFps(); }
+  shotsFired(): number { return this.stats.shots; }
 
   /** Render resolution ratio used by 'minimal' quality; auto mode nudges it to hold a playable frame rate. */
   private minimalRatio = 0.36;
@@ -615,12 +620,16 @@ export class CombatGame {
     const s = this.state;
     const { input, firing, impact } = this.gatherInput(active);
     if (this.playerDown) { input.mx = input.mz = 0; input.jump = false; }
+    const beforeX = s.x, beforeZ = s.z;
     const events = stepMech(s, input, dt, this.world.arena);
+    this.signals.moved += Math.hypot(s.x - beforeX, s.z - beforeZ);
     this.online?.afterLocalStep(input, dt);
     if (events.jumped) this.sfx.jump();
     if (events.pad) { this.sfx.dash(); this.fx.shockwave(new Vector3(s.x, s.y + 0.1, s.z), 2.2, [0.4, 0.9, 1], 0.35, 0.1); this.fovKick = Math.max(this.fovKick, 0.08); }
     if (events.landed) { this.player.land(events.landed); this.sfx.land(events.landed / 4); if (events.landed > 9) this.fx.shockwave(new Vector3(s.x, s.y + 0.1, s.z), 2.4, [0.8, 0.9, 1], 0.35, 0.08); this.fx.shake(Math.min(0.2, events.landed * 0.012)); }
-    if (events.dashed) { this.sfx.dash(); this.fx.shake(0.12); this.fovKick = 0.12; this.dashTrail(); }
+    if (events.jumped || events.jetStart) this.signals.jumped = true;
+    if (events.pad) this.signals.pad = true;
+    if (events.dashed) { this.signals.dashed = true; this.sfx.dash(); this.fx.shake(0.12); this.fovKick = 0.12; this.dashTrail(); }
     if (events.shield) { this.sfx.shield(); this.onToast?.('ESCUDO DE ENERGIA ATIVO'); }
     this.player.setShield(s.shieldTime > 0);
     this.jetSound += ((s.jetting ? 1 : s.dashTime > 0 ? 0.6 : 0) - this.jetSound) * Math.min(1, dt * 10);
