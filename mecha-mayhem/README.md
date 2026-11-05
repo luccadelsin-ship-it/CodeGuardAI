@@ -161,3 +161,11 @@ npm start          # http://localhost:8080/  ·  online em ws://localhost:8080/o
 - Dano localizado distingue cabeça, tronco, braços e pernas. A perda do braço direito impede disparo, pernas destruídas reduzem a velocidade, e membros destacados se soltam do modelo procedural. A oficina oferece três estilos cosméticos; as seis famílias completas da especificação continuam para uma próxima fase.
 - Efeitos de onda de choque usam pool de malhas; partículas e detritos já usam pools ou instâncias.
 - O desempenho em GPU real não foi medido neste ambiente.
+
+## Versão Artefato (claude.ai)
+
+`npm run build:artifact` gera `dist-artifact/` com caminhos relativos, um único bundle JS e os modelos `.glb`
+convertidos para glTF JSON (o host de artefatos não serve `.glb`). A página publicada é `dist-artifact/mecha-mayhem.html`
+e os arquivos de apoio estão listados em `dist-artifact/files.json`. Nessa versão a troca de mapa/capítulo passa os
+parâmetros por `sessionStorage` e recarrega a página, porque o artefato não aceita query string. O modo online não funciona
+no artefato (sem servidor WebSocket); treino, história, garagem, progressão e editor funcionam e salvam no navegador.

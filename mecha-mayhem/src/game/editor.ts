@@ -97,7 +97,7 @@ export class MapEditor {
   }
 
   private async loadBase(): Promise<void> {
-    const res = await fetch(`/assets/models/${MAPS[this.map.base].layoutFile}`);
+    const res = await fetch(`assets/models/${MAPS[this.map.base].layoutFile}`);
     this.layout = await res.json() as ArenaLayout;
     this.rebuildArena();
     this.draw();

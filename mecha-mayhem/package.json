@@ -8,7 +8,8 @@
     "preview": "vite preview --host 0.0.0.0",
     "start": "node server/index.ts",
     "smoke": "node scripts/smoke.mjs",
-    "live": "node scripts/live.mjs"
+    "live": "node scripts/live.mjs",
+    "build:artifact": "vite build --mode artifact && node scripts/artifact.mjs"
   },
   "type": "module",
   "dependencies": {

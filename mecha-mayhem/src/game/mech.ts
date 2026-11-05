@@ -1,3 +1,4 @@
+import { modelFile } from './launch';
 import {
   Color3,
   FresnelParameters,
@@ -543,9 +544,10 @@ export function createMech(scene: Scene, palette: MechPalette, variant: MechVari
   function loadShowcase(): Promise<boolean> {
     if (showcasePromise) return showcasePromise;
     showcasePromise = (async () => {
-      for (const [folder, file] of [['/assets/triverse/', 'striker_full_colored.glb'], ['/assets/models/striker/', 'striker_full.glb']]) {
+      for (const [folder, file] of [['assets/triverse/', 'striker_full_colored.glb'], ['assets/models/striker/', 'striker_full.glb']]) {
         try {
-          const imported = await SceneLoader.ImportMeshAsync('', folder, file, scene);
+          const model = modelFile(file);
+          const imported = await SceneLoader.ImportMeshAsync('', folder, model.file, scene, undefined, model.ext);
           const importedMaterials = [...new Set(imported.meshes.map((mesh) => mesh.material).filter((mat): mat is Material => mat !== null))];
           if (disposed) {
             for (const mesh of imported.meshes) mesh.dispose(false, false);

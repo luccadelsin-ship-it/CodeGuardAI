@@ -1,3 +1,4 @@
+import { modelFile } from './launch';
 import {
   AbstractMesh,
   AssetContainer,
@@ -123,7 +124,8 @@ function material(scene: Scene, name: string, hex: string, emissive = false, spe
 
 async function loadContainer(scene: Scene, file: string): Promise<AssetContainer | null> {
   try {
-    return await SceneLoader.LoadAssetContainerAsync('/assets/sketchfab/', file, scene);
+    const model = modelFile(file);
+    return await SceneLoader.LoadAssetContainerAsync('assets/sketchfab/', model.file, scene, undefined, model.ext);
   } catch (error) {
     console.warn(`Could not load Sketchfab prop ${file}`, error);
     return null;
@@ -203,7 +205,7 @@ export async function createWorld(scene: Scene, onProgress?: (label: string) => 
   shadows.darkness = 0.18;
 
   onProgress?.('Lendo o layout da arena');
-  const response = await fetch(`/assets/models/${MAPS[mapId].layoutFile}`);
+  const response = await fetch(`assets/models/${MAPS[mapId].layoutFile}`);
   if (!response.ok) throw new Error(`${MAPS[mapId].name} layout: HTTP ${response.status}`);
   const layout = await response.json() as ArenaLayout;
   const arena = createArena(layout, { mapId, custom });
@@ -218,7 +220,8 @@ export async function createWorld(scene: Scene, onProgress?: (label: string) => 
 
   onProgress?.(`Montando ${MAPS[mapId].name} em 3D`);
   if (mapId === 'frozen') {
-    const arenaImport = await SceneLoader.ImportMeshAsync('', '/assets/models/', 'frozen_outpost.glb', scene);
+    const arenaModel = modelFile('frozen_outpost.glb');
+    const arenaImport = await SceneLoader.ImportMeshAsync('', 'assets/models/', arenaModel.file, scene, undefined, arenaModel.ext);
     importedNodes.push(...arenaImport.meshes, ...arenaImport.transformNodes);
     for (const mesh of arenaImport.meshes) { mesh.receiveShadows = true; mesh.isPickable = false; }
   } else {

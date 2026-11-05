@@ -1,5 +1,6 @@
 import { Engine, HavokPlugin, Scene, Vector3 } from '@babylonjs/core';
 import HavokPhysics from '@babylonjs/havok';
+import { forget, isArtifactBuild, launchParams, launchSearch, nextLaunch, relaunch } from './game/launch';
 import havokWasmUrl from '@babylonjs/havok/lib/esm/HavokPhysics.wasm?url';
 import { CombatGame, type HudState, type Marker, type RadarState, type ResultInfo } from './game/combat';
 import { DIFFICULTIES, type Difficulty } from './game/drones';
@@ -42,19 +43,20 @@ let rotateTimer = 0;
 let scoreboardHeld = false;
 let garageReturn: 'menu' | 'lobby' = 'menu';
 let partConfig: MechPartConfig = normalizeParts(null);
-const storyChapter = chapterFromSearch(location.search);
-const customMap = storyChapter ? null : findCustomMap(new URLSearchParams(location.search).get('custom'));
-const selectedMap = storyChapter ? storyChapter.map : customMap ? customMap.base : mapFromSearch(location.search);
+const storyChapter = chapterFromSearch(launchSearch);
+const customMap = storyChapter ? null : findCustomMap(launchParams.get('custom'));
+const selectedMap = storyChapter ? storyChapter.map : customMap ? customMap.base : mapFromSearch(launchSearch);
 let editor: MapEditor | null = null;
 
 /** Reload into a created map; the training starts right after loading. */
 function playCustomMap(map: CustomMap): void {
-  const url = new URL(location.href);
-  url.searchParams.set('map', map.base);
-  url.searchParams.set('custom', map.id);
-  url.searchParams.set('play', '1');
-  url.searchParams.delete('lobby');
-  location.href = url.href;
+  const next = nextLaunch();
+  next.set('map', map.base);
+  next.set('custom', map.id);
+  next.set('play', '1');
+  next.delete('lobby');
+  next.delete('story');
+  relaunch(next);
 }
 
 function progress(percent: number, label: string): void {
@@ -105,10 +107,10 @@ function loadSetting(key: string, fallback: string): string {
 }
 
 function changeMap(id: MapId, lobby = false): void {
-  const url = new URL(location.href);
-  if (id === 'frozen') url.searchParams.delete('map'); else url.searchParams.set('map', id);
-  if (lobby) url.searchParams.set('lobby', '1'); else url.searchParams.delete('lobby');
-  location.href = url.href;
+  const next = nextLaunch();
+  if (id === 'frozen') next.delete('map'); else next.set('map', id);
+  if (lobby) next.set('lobby', '1'); else next.delete('lobby');
+  relaunch(next);
 }
 
 function refreshLoadout(): void {
@@ -211,7 +213,7 @@ function bindPartCustomization(): void {
   }));
   game.setChassis(partConfig);
   renderParts();
-  void fetch('/assets/modular/catalog.json').then((r) => r.json()).then((c: { parts: CatalogPart[] }) => { catalogParts = c.parts; renderParts(); }).catch(() => { /* images are optional */ });
+  void fetch('assets/modular/catalog.json').then((r) => r.json()).then((c: { parts: CatalogPart[] }) => { catalogParts = c.parts; renderParts(); }).catch(() => { /* images are optional */ });
 }
 
 function toast(message: string): void {
@@ -509,13 +511,13 @@ function renderStory(): void {
 }
 
 function playChapter(c: StoryChapter): void {
-  const url = new URL(location.href);
-  url.searchParams.set('map', c.map);
-  url.searchParams.set('story', String(c.id));
-  url.searchParams.set('play', '1');
-  url.searchParams.delete('custom');
-  url.searchParams.delete('lobby');
-  location.href = url.href;
+  const next = nextLaunch();
+  next.set('map', c.map);
+  next.set('story', String(c.id));
+  next.set('play', '1');
+  next.delete('custom');
+  next.delete('lobby');
+  relaunch(next);
 }
 
 function showResult(result: ResultInfo): void {
@@ -658,7 +660,10 @@ function bindUI(): void {
   });
   el('restart-button').addEventListener('click', startTraining);
   el('garage-button').addEventListener('click', () => { garageReturn = 'menu'; game.setMode('garage'); show('garage'); });
-  el('online-button').addEventListener('click', () => { game.setMode('settings'); show('online'); });
+  el('online-button').addEventListener('click', () => {
+    game.setMode('settings'); show('online');
+    if (isArtifactBuild) el('online-status').textContent = 'O ONLINE PRECISA DO SERVIDOR DO JOGO. NESTA VERSÃO NO NAVEGADOR, JOGUE TREINO, HISTÓRIA E EDITOR; PARA ONLINE, RODE O ZIP COM npm run dev.';
+  });
   el('settings-button').addEventListener('click', () => { game.setMode('settings'); show('settings'); });
   el('tip-skip').addEventListener('click', finishTips);
   window.setInterval(updateTips, 250);
@@ -809,7 +814,7 @@ function bindUI(): void {
 async function loadCredits(): Promise<void> {
   type Credit = { title: string; author: string; url: string };
   try {
-    const response = await fetch('/assets/sketchfab/manifest.json');
+    const response = await fetch('assets/sketchfab/manifest.json');
     const credits = await response.json() as Credit[];
     const list = el('credits-list');
     for (const credit of credits) {
@@ -850,7 +855,7 @@ async function bootstrap(): Promise<void> {
   touch = new TouchControls(el('app'));
   game.touch = touch;
   touch.onAction = (action) => { if (action === 'pause') { game.pause(); } };
-  const debug = import.meta.env.DEV || location.search.includes('debug');
+  const debug = import.meta.env.DEV || launchSearch.includes('debug');
   if (debug) (window as unknown as { __mecha?: CombatGame; __online?: () => OnlineSession | null }).__mecha = game;
   if (debug) (window as unknown as { __online?: () => OnlineSession | null }).__online = () => online;
   game.player.setShowcase(true);
@@ -888,9 +893,8 @@ async function bootstrap(): Promise<void> {
   progress(100, 'Sistemas operacionais');
   window.setTimeout(() => {
     loading.classList.add('hidden');
-    const params = new URLSearchParams(location.search);
-    if ((customMap || storyChapter) && params.get('play') === '1') { params.delete('play'); history.replaceState(null, '', `?${params}`); el('start-button').click(); }
-    else if (params.get('lobby') === '1') openLobby(); else show('menu');
+    if ((customMap || storyChapter) && launchParams.get('play') === '1') { forget('play'); el('start-button').click(); }
+    else if (launchParams.get('lobby') === '1') openLobby(); else show('menu');
   }, 450);
 }
 

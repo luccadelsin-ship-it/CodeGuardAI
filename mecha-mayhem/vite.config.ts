@@ -39,7 +39,12 @@ function mechaOnline(): Plugin {
   };
 }
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [mechaOnline()],
-  build: { chunkSizeWarningLimit: 8000 },
-});
+  // `npm run build:artifact` makes a single-bundle build with relative paths for hosting as a claude.ai Artifact.
+  ...(mode === 'artifact' ? { base: './' } : {}),
+  build: {
+    chunkSizeWarningLimit: 8000,
+    ...(mode === 'artifact' ? { outDir: 'dist-artifact', rolldownOptions: { output: { codeSplitting: false } } } : {}),
+  },
+}));
