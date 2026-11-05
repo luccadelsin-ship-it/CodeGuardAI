@@ -15,6 +15,7 @@ import { FAMILIES, FAMILY_ORDER, computeLoadout, type FamilyId } from './shared/
 import { PASS_TIER_XP, SEASON_PASS, SHOP, awardMatch, buyItem, claimTier, equip, equippedItem, levelInfo, loadProfile, passTier, saveProfile } from './game/progression';
 import { MapEditor, findCustomMap } from './game/editor';
 import type { CustomMap } from './shared/arena';
+import { STORY, chapterFromSearch, completeChapter, storyProgress, type StoryChapter } from './game/story';
 import './style.css';
 
 const el = <T extends HTMLElement = HTMLElement>(id: string): T => {
@@ -28,7 +29,7 @@ const loading = el('loading');
 const progressFill = el('loading-fill');
 const progressLabel = el('loading-label');
 const progressPercent = el('loading-percent');
-const screenIds = ['menu', 'lobby', 'garage', 'online', 'settings', 'credits', 'progress', 'editor', 'pause', 'result'] as const;
+const screenIds = ['menu', 'lobby', 'garage', 'online', 'settings', 'credits', 'progress', 'editor', 'story', 'pause', 'result'] as const;
 type UiScreen = typeof screenIds[number] | 'game';
 let currentScreen: UiScreen = 'menu';
 let game: CombatGame;
@@ -41,8 +42,9 @@ let rotateTimer = 0;
 let scoreboardHeld = false;
 let garageReturn: 'menu' | 'lobby' = 'menu';
 let partConfig: MechPartConfig = normalizeParts(null);
-const customMap = findCustomMap(new URLSearchParams(location.search).get('custom'));
-const selectedMap = customMap ? customMap.base : mapFromSearch(location.search);
+const storyChapter = chapterFromSearch(location.search);
+const customMap = storyChapter ? null : findCustomMap(new URLSearchParams(location.search).get('custom'));
+const selectedMap = storyChapter ? storyChapter.map : customMap ? customMap.base : mapFromSearch(location.search);
 let editor: MapEditor | null = null;
 
 /** Reload into a created map; the training starts right after loading. */
@@ -475,13 +477,14 @@ function finishTips(): void { saveSetting('tips-done', '1'); tipIndex = -1; el('
 function updateTips(): void {
   if (tipIndex < 0) {
     if (tipsDone() || currentScreen !== 'game' || game.session !== 'training') return;
-    tipIndex = 0; tipShownAt = performance.now();
+    tipIndex = Math.min(TIPS.length - 1, Number(loadSetting('tips-step', '0')) || 0); tipShownAt = performance.now();
   }
   if (currentScreen !== 'game' || game.session !== 'training') { el('tip').classList.add('hidden'); return; }
   const tip = TIPS[tipIndex];
   const elapsed = (performance.now() - tipShownAt) / 1000;
   if ((tip.done() && elapsed > 1.2) || (tip.minTime !== undefined && elapsed > tip.minTime + (tip.done() ? 0 : 6))) {
     tipIndex++;
+    saveSetting('tips-step', String(tipIndex));
     tipShownAt = performance.now();
     if (tipIndex >= TIPS.length) { finishTips(); toast('DICAS CONCLUÍDAS · BOA CAÇADA!'); return; }
   }
@@ -490,10 +493,41 @@ function updateTips(): void {
   el('tip-text').innerHTML = TIPS[tipIndex].key(document.body.classList.contains('touch-mode'));
 }
 
+let storySelected = 1;
+function renderStory(): void {
+  const done = storyProgress();
+  storySelected = Math.min(storySelected, done + 1, STORY.length);
+  el('story-count').textContent = `${done}/${STORY.length} CONCLUÍDOS`;
+  el('story-list').innerHTML = STORY.map((c) => {
+    const locked = c.id > done + 1, complete = c.id <= done;
+    return `<button class="story-card${c.id === storySelected ? ' active' : ''}${locked ? ' locked' : ''}" data-chapter="${c.id}" ${locked ? 'disabled' : ''} style="--map-color:${MAPS[c.map].color}"><small>${c.title}${complete ? ' · ✓ CONCLUÍDO' : locked ? ' · 🔒 BLOQUEADO' : ''}</small><strong>${c.subtitle}</strong><span>${MAPS[c.map].label} · ${c.waves.length} ONDAS</span></button>`;
+  }).join('');
+  el('story-list').querySelectorAll<HTMLButtonElement>('[data-chapter]').forEach((b) => b.addEventListener('click', () => { storySelected = Number(b.dataset.chapter); renderStory(); }));
+  const c = STORY[storySelected - 1];
+  el('story-brief').innerHTML = `<span class="eyebrow">${c.title} · ${MAPS[c.map].label}</span><h2>${c.subtitle}</h2>${c.briefing.map((line) => `<p>${line}</p>`).join('')}<div class="story-reward">RECOMPENSA: +${c.rewardCredits} CRÉDITOS · DIFICULDADE ${DIFFICULTIES[game.difficulty].label}</div><button id="story-play" class="hub-play"><small>${c.id <= storyProgress() ? 'JOGAR DE NOVO' : 'INICIAR'}</small><strong>${c.title}</strong></button>`;
+  el('story-play').addEventListener('click', () => playChapter(c));
+}
+
+function playChapter(c: StoryChapter): void {
+  const url = new URL(location.href);
+  url.searchParams.set('map', c.map);
+  url.searchParams.set('story', String(c.id));
+  url.searchParams.set('play', '1');
+  url.searchParams.delete('custom');
+  url.searchParams.delete('lobby');
+  location.href = url.href;
+}
+
 function showResult(result: ResultInfo): void {
   const stats = game.matchStats();
   const summary = awardMatch(profile, { score: result.score, kills: stats.kills, won: result.won, waves: stats.waves, online: game.session === 'online' });
   el('result-progress').innerHTML = `<span>+${summary.xp} XP</span><span>+${summary.credits} CRÉDITOS</span>${summary.levelAfter > summary.levelBefore ? `<span class="up">NÍVEL ${summary.levelAfter}!</span>` : `<span>NÍVEL ${summary.levelAfter}</span>`}${summary.tiersAfter > summary.tiersBefore ? `<span class="up">PASSE NÍVEL ${summary.tiersAfter} · RESGATE NO MENU</span>` : ''}`;
+  if (storyChapter && result.won && game.session === 'training') {
+    const first = completeChapter(storyChapter.id);
+    if (first) { profile.credits += storyChapter.rewardCredits; saveProfile(profile); }
+    const next = STORY[storyChapter.id];
+    el('result-progress').insertAdjacentHTML('beforeend', `<span class="up">${storyChapter.title} CONCLUÍDO${first ? ` · +${storyChapter.rewardCredits} CR` : ''}</span>${next ? `<span class="up">LIBERADO: ${next.title} · ${next.subtitle}</span>` : '<span class="up">CAMPANHA COMPLETA!</span>'}`);
+  }
   refreshProfileBadge();
   el('result-kicker').textContent = result.kicker;
   el('result-title').textContent = result.title;
@@ -570,7 +604,7 @@ function applyTheme(index: number): void {
 
 async function joinOnline(mode: OnlineMode, room?: string, create?: boolean): Promise<void> {
   const status = el('online-status');
-  if (customMap) { status.textContent = 'MAPAS CRIADOS FUNCIONAM NO TREINO. VOLTE A UM MAPA PADRÃO PARA JOGAR ONLINE.'; status.classList.add('error'); return; }
+  if (customMap || storyChapter) { status.textContent = 'MAPAS CRIADOS E O MODO HISTÓRIA FUNCIONAM NO TREINO. VOLTE A UM MAPA PADRÃO PARA JOGAR ONLINE.'; status.classList.add('error'); return; }
   const name = (el<HTMLInputElement>('pilot-name').value.trim() || 'PILOTO').toUpperCase().slice(0, 16);
   saveSetting('pilot', name);
   const url = el<HTMLInputElement>('server-url').value.trim() || defaultServerUrl();
@@ -639,6 +673,7 @@ function bindUI(): void {
   el('credits-button').addEventListener('click', () => { game.setMode('settings'); show('credits'); });
   el('credits-button-mobile').addEventListener('click', () => { game.setMode('settings'); show('credits'); });
   el('hub-play-tab').addEventListener('click', () => el('start-button').focus());
+  el('story-button').addEventListener('click', () => { game.setMode('settings'); renderStory(); show('story'); });
   document.querySelectorAll<HTMLButtonElement>('[data-squad]').forEach((b) => b.addEventListener('click', () => { game.setMode('settings'); show('online'); toast('CRIE UMA SALA PRIVADA E ENVIE O CÓDIGO AOS AMIGOS'); }));
   el('editor-button').addEventListener('click', () => {
     game.setMode('settings');
@@ -821,6 +856,12 @@ async function bootstrap(): Promise<void> {
   game.player.setShowcase(true);
   progress(89, 'Carregando Striker criado no Blender');
   await game.player.loadShowcase();
+  if (storyChapter) {
+    game.setMission({ id: storyChapter.id, title: storyChapter.title, subtitle: storyChapter.subtitle, waves: storyChapter.waves, debrief: storyChapter.debrief });
+    world.setTheme(storyChapter.theme);
+    el('map-tag').textContent = `${storyChapter.title} · ${storyChapter.subtitle}`;
+    el('hud-map').textContent = `${storyChapter.subtitle}`;
+  }
   game.onHud = updateHud;
   game.onToast = toast;
   game.onHit = hit;
@@ -848,7 +889,7 @@ async function bootstrap(): Promise<void> {
   window.setTimeout(() => {
     loading.classList.add('hidden');
     const params = new URLSearchParams(location.search);
-    if (customMap && params.get('play') === '1') { params.delete('play'); history.replaceState(null, '', `?${params}`); el('start-button').click(); }
+    if ((customMap || storyChapter) && params.get('play') === '1') { params.delete('play'); history.replaceState(null, '', `?${params}`); el('start-button').click(); }
     else if (params.get('lobby') === '1') openLobby(); else show('menu');
   }, 450);
 }

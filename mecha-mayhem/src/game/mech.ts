@@ -23,7 +23,7 @@ import { armorBox, armorSurface } from './armorGraphics';
 
 export type { MechPalette };
 export type { MechPartConfig, PartStyle };
-export type MechVariant = 'player' | 'sentinel' | 'brute' | 'sniper' | 'boss';
+export type MechVariant = 'player' | 'sentinel' | 'brute' | 'sniper' | 'boss' | 'mortar' | 'bulwark';
 
 export interface MechMotion {
   /** Local forward speed (m/s, negative = backwards). */
@@ -76,6 +76,8 @@ const VARIANT_COLORS: Record<Exclude<MechVariant, 'player'>, { armor: string; ed
   brute: { armor: '#4A5560', edge: '#FF8A2A', glow: '#FFB03A', scale: 1.02 },
   sniper: { armor: '#4B3F6B', edge: '#D23CFF', glow: '#FF45D0', scale: 0.84 },
   boss: { armor: '#2A3138', edge: '#FF3A2A', glow: '#FF2A1A', scale: 1.55 },
+  mortar: { armor: '#5A4A30', edge: '#FF9A2A', glow: '#FFC24A', scale: 0.92 },
+  bulwark: { armor: '#2E4A66', edge: '#5FD8FF', glow: '#7FE8FF', scale: 1.08 },
 };
 
 const WEAPON_GLOW: Record<WeaponId, string> = { mg: '#58DEFF', shotgun: '#FFB45A', laser: '#FF4FD8', missile: '#FF8A2A', sword: '#46DFFF', hammer: '#FF9B36' };

@@ -13,7 +13,7 @@ import { createMech, type MechVisual } from './mech';
 import type { Fx } from './fx';
 import type { Sfx } from './audio';
 
-export type EnemyType = 'sentinel' | 'brute' | 'sniper' | 'wasp' | 'boss';
+export type EnemyType = 'sentinel' | 'brute' | 'sniper' | 'wasp' | 'boss' | 'mortar' | 'bulwark' | 'medic';
 export type Difficulty = 'recruit' | 'veteran' | 'elite';
 type Rgb = [number, number, number];
 
@@ -51,6 +51,9 @@ export const ENEMY_DEFS: Record<EnemyType, EnemyDef> = {
   brute: { name: 'ROMPEDOR', health: 230, speed: 5.3, range: [0, 7], score: 650, scale: 1.02, flying: false, color: [1, 0.68, 0.22] },
   sniper: { name: 'ATIRADOR', health: 85, speed: 4.2, range: [24, 40], score: 480, scale: 0.84, flying: false, color: [1, 0.3, 0.85] },
   wasp: { name: 'VESPA', health: 40, speed: 9, range: [9, 15], score: 220, scale: 1, flying: true, color: [1, 0.25, 0.2] },
+  mortar: { name: 'MORTEIRO', health: 110, speed: 3.6, range: [18, 34], score: 520, scale: 0.92, flying: false, color: [1, 0.6, 0.15] },
+  bulwark: { name: 'BASTIÃO', health: 260, speed: 3.4, range: [5, 13], score: 700, scale: 1.08, flying: false, color: [0.4, 0.85, 1] },
+  medic: { name: 'REPARADOR', health: 55, speed: 8, range: [14, 24], score: 450, scale: 1, flying: true, color: [0.35, 1, 0.55] },
   boss: { name: 'COLOSSO', health: 1500, speed: 3.1, range: [6, 18], score: 4000, scale: 1.55, flying: false, color: [1, 0.25, 0.12] },
 };
 
@@ -164,7 +167,7 @@ function navFor(arena: Arena): NavGraph {
 }
 
 /** Flying drone built from real meshes: armoured pod, four rotors, eye and cannon. */
-function createWaspVisual(scene: Scene, id: number) {
+function createWaspVisual(scene: Scene, id: number, eyeHex = '#ff3b2a', shellHex = '#3b4852') {
   const root = new TransformNode(`wasp-${id}`, scene);
   const body = new TransformNode(`wasp-${id}-body`, scene);
   body.parent = root;
@@ -176,9 +179,10 @@ function createWaspVisual(scene: Scene, id: number) {
     if (emissive) { m.emissiveColor = c; }
     return m;
   };
-  const shell = mat('shell', '#3b4852');
+  const shell = mat('shell', shellHex);
   const dark = mat('dark', '#0e171e');
-  const eye = mat('eye', '#ff3b2a', true);
+  const eye = mat('eye', eyeHex, true);
+  const eyeBase = Color3.FromHexString(eyeHex);
   const rotorMat = mat('rotor', '#9fd8ff', true);
   rotorMat.alpha = 0.35;
   const meshes: Mesh[] = [];
@@ -217,7 +221,7 @@ function createWaspVisual(scene: Scene, id: number) {
       body.position.y = Math.sin(t * 3) * 0.12;
       hit = Math.max(0, hit - dt);
       const pulse = alert > 0 ? 1 + alert * (1.5 + Math.sin(t * 45)) : 1;
-      eye.emissiveColor = new Color3(1, 0.23, 0.16).scale(pulse);
+      eye.emissiveColor = eyeBase.scale(pulse);
       shell.emissiveColor = hit > 0 ? new Color3(0.9, 0.15, 0.05).scale(hit / 0.18) : Color3.Black();
       eyeMesh.scaling.setAll(1 + alert * 0.5);
     },
@@ -274,20 +278,46 @@ export class Enemy {
   private slamRing?: { mesh: Mesh; radius: number; hit: boolean };
   private shotsFired = 0;
   private volleys: number[] = [];
+  private frontShield?: Mesh;
+  private strikes: Array<{ at: Vector3; due: number; marker: Mesh; ring: Mesh }> = [];
+  private healTimer = 1.5;
   private disposed = false;
 
   constructor(readonly type: EnemyType, scene: Scene, position: Vector3, difficulty: DifficultyDef) {
     this.def = ENEMY_DEFS[type];
     this.maxHealth = this.health = this.def.health * difficulty.health;
-    if (type === 'wasp') {
-      this.wasp = createWaspVisual(scene, this.id);
+    if (type === 'wasp' || type === 'medic') {
+      this.wasp = type === 'medic' ? createWaspVisual(scene, this.id, '#5dff8a', '#e6efe9') : createWaspVisual(scene, this.id);
+      if (type === 'medic') {
+        // Repair drone: a green cross on top so players can pick it out as a priority target.
+        const crossMat = new StandardMaterial(`medic-${this.id}-cross`, scene);
+        crossMat.emissiveColor = new Color3(0.35, 1, 0.55);
+        crossMat.disableLighting = true;
+        for (const [w, d] of [[0.7, 0.2], [0.2, 0.7]]) {
+          const bar = MeshBuilder.CreateBox(`medic-${this.id}-cross-${w}`, { width: w, height: 0.08, depth: d }, scene);
+          bar.parent = this.wasp.body; bar.position.y = 0.46; bar.material = crossMat; bar.isPickable = false;
+        }
+      }
       this.root = this.wasp.root;
       this.root.position.set(position.x, position.y + this.altitude + 6, position.z);
     } else {
-      const weapon = type === 'brute' ? 'shotgun' : type === 'sniper' ? 'laser' : type === 'boss' ? 'missile' : 'mg';
+      const weapon = type === 'brute' ? 'shotgun' : type === 'sniper' ? 'laser' : type === 'boss' || type === 'mortar' ? 'missile' : 'mg';
       this.mech = createMech(scene, 'steel', type, weapon);
       this.root = this.mech.root;
       this.root.position.copyFrom(position);
+      if (type === 'bulwark') {
+        // Front energy shield (blocks most frontal damage; it drops while the Bastião fires).
+        const mat = new StandardMaterial(`bulwark-${this.id}-shield`, scene);
+        mat.emissiveColor = new Color3(0.35, 0.85, 1);
+        mat.disableLighting = true;
+        mat.alpha = 0.32;
+        mat.backFaceCulling = false;
+        const plate = MeshBuilder.CreateBox(`bulwark-${this.id}-shield`, { width: 2.5, height: 2.8, depth: 0.08 }, scene);
+        plate.parent = this.root; plate.position.set(0, 1.9, 1.35); plate.material = mat; plate.isPickable = false;
+        const rim = MeshBuilder.CreateBox(`bulwark-${this.id}-rim`, { width: 2.6, height: 0.1, depth: 0.12 }, scene);
+        rim.parent = plate; rim.position.y = 1.4; rim.material = mat; rim.isPickable = false;
+        this.frontShield = plate;
+      }
     }
     this.fireTimer = 1.2 + Math.random() * 1.2;
     this.lastPos.copyFrom(this.root.position);
@@ -301,9 +331,18 @@ export class Enemy {
   get stateLabel(): string { return this.state; }
 
   /** Apply damage from the player; returns true if it killed the enemy. */
+  /** True when the Bastião's front shield faces the attacker (and is not lowered to fire). */
+  shieldBlocks(from: Vector3): boolean {
+    if (!this.frontShield || !this.frontShield.isEnabled()) return false;
+    const dx = from.x - this.position.x, dz = from.z - this.position.z;
+    const d = Math.hypot(dx, dz) || 1;
+    return (dx * Math.sin(this.yaw) + dz * Math.cos(this.yaw)) / d > 0.35;
+  }
+
   takeDamage(amount: number, from: Vector3, knockback: number, zone: keyof Enemy['parts'] = 'torso'): boolean {
     if (!this.alive) return false;
     if (this.shieldTime > 0) amount *= 0.2;
+    if (this.shieldBlocks(from)) { amount *= 0.15; knockback *= 0.2; }
     this.health -= amount;
     const before = this.parts[zone];
     this.parts[zone] = Math.max(0, before - amount);
@@ -357,6 +396,9 @@ export class Enemy {
     else this.updateGround(ctx, dt, sees);
     if (this.slamRing) this.updateSlam(ctx, dt);
     if (this.volleys.length) this.updateVolleys(ctx, dt);
+    if (this.strikes.length || this.type === 'mortar') this.updateMortar(ctx, dt, sees);
+    // The Bastião lowers its shield only while firing a burst: that is the window to hit it head-on.
+    if (this.frontShield) this.frontShield.setEnabled(this.burstLeft <= 0 && this.state !== 'stagger');
   }
 
   // ----------------------------------------------------------- ground mechs
@@ -393,7 +435,7 @@ export class Enemy {
       case 'engage': {
         if (!sees && ctx.time - this.lastSeen > 1.6) { this.enter(this.type === 'sentinel' ? 'flank' : 'patrol'); break; }
         // Damage reactions: back off, or break for cover when hurt.
-        if (this.recentDamage > 28 && this.type !== 'boss' && this.type !== 'brute') { this.enter('retreat'); break; }
+        if (this.recentDamage > 28 && this.type !== 'boss' && this.type !== 'brute' && this.type !== 'bulwark') { this.enter('retreat'); break; }
         if (this.health < this.maxHealth * 0.45 && this.coverUsed < 2 && (this.type === 'sentinel' || this.type === 'sniper')) {
           const cover = this.findCover(ctx);
           if (cover) { this.coverPoint = cover; this.coverUsed++; this.enter('cover'); break; }
@@ -615,8 +657,69 @@ export class Enemy {
     return dir.normalize();
   }
 
+/** Morteiro: marks the ground where the shell will land, then the shell falls there. */
+  private updateMortar(ctx: AiContext, _dt: number, sees: boolean): void {
+    const deck = ctx.arena.deckY;
+    if (this.type === 'mortar' && this.alive && this.fireTimer <= 0 && (sees || ctx.time - this.lastSeen < 3) && ctx.player.alive && this.state !== 'spawn' && this.state !== 'stagger') {
+      const lead = ctx.player.velocity.scale(0.9 * ctx.difficulty.lead);
+      const at = new Vector3(ctx.player.position.x + lead.x + (Math.random() - 0.5) * 2, deck + 0.06, ctx.player.position.z + lead.z + (Math.random() - 0.5) * 2);
+      const mat = new StandardMaterial(`mortar-${this.id}-mark`, ctx.scene);
+      mat.emissiveColor = new Color3(1, 0.25, 0.1); mat.disableLighting = true; mat.alpha = 0.35;
+      const marker = MeshBuilder.CreateDisc(`mortar-${this.id}-marker`, { radius: 3.4, tessellation: 32 }, ctx.scene);
+      marker.rotation.x = Math.PI / 2; marker.position.copyFrom(at); marker.material = mat; marker.isPickable = false;
+      const ring = MeshBuilder.CreateTorus(`mortar-${this.id}-ring`, { diameter: 6.8, thickness: 0.12, tessellation: 40 }, ctx.scene);
+      ring.position.set(at.x, deck + 0.1, at.z); ring.material = mat; ring.isPickable = false;
+      this.strikes.push({ at, due: ctx.time + 1.45 * ctx.difficulty.reaction, marker, ring });
+      this.mech?.kick(0.8);
+      if (this.mech) ctx.fx.muzzleFlash(this.mech.muzzle, this.def.color, 1.2);
+      ctx.sfx.missile();
+      this.fireTimer = (3.2 + Math.random()) / ctx.difficulty.aggression;
+    }
+    for (let i = this.strikes.length - 1; i >= 0; i--) {
+      const s = this.strikes[i];
+      const left = s.due - ctx.time;
+      const k = Math.max(0, Math.min(1, 1 - left / 1.45));
+      s.ring.scaling.setAll(1.15 - k * 0.6);
+      (s.marker.material as StandardMaterial).alpha = 0.2 + k * 0.4;
+      if (left > 0) continue;
+      ctx.fx.tracer(s.at.add(new Vector3(0, 26, 0)), s.at, [1, 0.6, 0.2], 0.25, 0.12);
+      ctx.explode(s.at.add(new Vector3(0, 0.4, 0)), 3.4, 19 * ctx.difficulty.damage, 'enemy');
+      s.marker.material?.dispose(); s.marker.dispose(); s.ring.dispose();
+      this.strikes.splice(i, 1);
+    }
+  }
+
+  /** Reparador: hovers near the most damaged ally, away from the player, and repairs everyone close by. */
+  private updateMedic(ctx: AiContext, dt: number): Vector3 {
+    const pos = this.position;
+    const allies = ctx.enemies.filter((e) => e !== this && e.alive && e.type !== 'medic');
+    const hurt = allies.sort((a, b) => a.health / a.maxHealth - b.health / b.maxHealth)[0];
+    const player = ctx.player.position;
+    let target: Vector3;
+    if (hurt) {
+      const away = hurt.position.subtract(player); away.y = 0;
+      const n = away.lengthSquared() > 0.01 ? away.normalize() : new Vector3(0, 0, 1);
+      target = hurt.position.add(n.scale(4)).add(new Vector3(0, 5.5, 0));
+    } else {
+      this.orbitAngle += dt * 0.3;
+      target = new Vector3(player.x + Math.cos(this.orbitAngle) * 22, ctx.arena.deckY + 7, player.z + Math.sin(this.orbitAngle) * 22);
+    }
+    if (Vector3.Distance(pos, player) < 11) target = pos.add(pos.subtract(player).normalize().scale(6)).add(new Vector3(0, 1, 0));
+    this.healTimer -= dt;
+    if (this.healTimer <= 0) {
+      this.healTimer = 1.8;
+      for (const a of allies) {
+        if (Vector3.Distance(a.center, pos) > 11 || a.health >= a.maxHealth) continue;
+        a.health = Math.min(a.maxHealth, a.health + a.maxHealth * 0.12);
+        ctx.fx.beam(pos, a.center, [0.35, 1, 0.55], 0.07);
+        ctx.fx.sparks(a.center, [0.35, 1, 0.55], 8, 0.6);
+      }
+    }
+    return target;
+  }
+
   private updateAttacks(ctx: AiContext, dt: number, sees: boolean, distance: number): void {
-    if (this.type === 'brute' || this.type === 'sniper' || this.type === 'boss') return;
+    if (this.type === 'brute' || this.type === 'sniper' || this.type === 'boss' || this.type === 'mortar') return;
     const mech = this.mech!;
     if (this.burstLeft > 0) {
       this.burstTimer -= dt;
@@ -830,6 +933,7 @@ export class Enemy {
         break;
       case 'engage':
       case 'patrol': {
+        if (this.type === 'medic') { target = this.updateMedic(ctx, dt); break; }
         this.orbitAngle += dt * (speed / 12) * this.strafeSign * 0.8;
         if (Math.random() < dt * 0.15) this.strafeSign *= -1;
         const r = 11 + Math.sin(ctx.time * 0.7 + this.id) * 3;
@@ -916,6 +1020,8 @@ export class Enemy {
     this.disposed = true;
     this.laserSight?.material?.dispose();
     this.laserSight?.dispose();
+    for (const st of this.strikes) { st.marker.material?.dispose(); st.marker.dispose(); st.ring.dispose(); }
+    this.strikes.length = 0;
     if (this.slamRing) { this.slamRing.mesh.material?.dispose(); this.slamRing.mesh.dispose(); this.slamRing = undefined; }
     this.mech?.dispose();
     this.wasp?.dispose();

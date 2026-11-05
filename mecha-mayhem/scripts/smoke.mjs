@@ -5,6 +5,7 @@
  * artifacts/smoke/. Exit code is non-zero when any check fails.
  */
 import { chromium } from 'playwright';
+import WebSocket from 'ws';
 import { mkdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { readFileSync } from 'node:fs';
@@ -14,7 +15,7 @@ import { createMechState, applyPartDamage, damageTaken, restoreParts, stepMech, 
 import { computeLoadout } from '../src/shared/parts.ts';
 import { validateParts } from '../src/shared/customization.ts';
 import { MAP_COVER } from '../src/shared/arena.ts';
-import { BOT_FILL } from '../src/shared/protocol.ts';
+import { BOT_FILL, PROTOCOL_VERSION } from '../src/shared/protocol.ts';
 import { meleeInArc } from '../src/shared/weapons.ts';
 
 const out = 'artifacts/smoke';
@@ -363,6 +364,54 @@ try {
   await game(page, () => window.__mecha.debugStep(2));
   await page.screenshot({ path: `${out}/editor-play.png` });
 
+  // New robots: Bastião's front shield, Reparador healing, Morteiro marked strikes.
+  const robots = await game(page, () => {
+    const g = window.__mecha;
+    const p = new g.player.root.position.constructor(g.state.x, g.state.y, g.state.z);
+    g.spawnEnemy('bulwark', p.add(new p.constructor(0, 0, 12)));
+    g.spawnEnemy('medic', p.add(new p.constructor(6, 0, 14)));
+    g.spawnEnemy('mortar', p.add(new p.constructor(-8, 0, 20)));
+    g.debugStep(1.2);
+    const list = g['enemies'];
+    const bulwark = list.find((e) => e.type === 'bulwark');
+    bulwark.yaw = Math.atan2(g.state.x - bulwark.position.x, g.state.z - bulwark.position.z);
+    const front = bulwark.position.add(new p.constructor(Math.sin(bulwark.yaw) * 5, 0, Math.cos(bulwark.yaw) * 5));
+    const back = bulwark.position.subtract(new p.constructor(Math.sin(bulwark.yaw) * 5, 0, Math.cos(bulwark.yaw) * 5));
+    const hp0 = bulwark.health; bulwark.takeDamage(40, front, 0);
+    const frontLoss = hp0 - bulwark.health; const hp1 = bulwark.health; bulwark.takeDamage(40, back, 0);
+    const backLoss = hp1 - bulwark.health;
+    const before = bulwark.health;
+    g.debugStep(4);
+    const mortarStrikes = list.find((e) => e.type === 'mortar')?.['strikes']?.length ?? 0;
+    return { frontLoss, backLoss, healed: bulwark.health > before, types: list.filter((e) => e.alive).map((e) => e.type), mortarStrikes, playerHp: Math.round(g.state.health) };
+  });
+  check('robôs novos: Bastião bloqueia de frente e leva dano por trás', robots.frontLoss < robots.backLoss * 0.3, `frente ${robots.frontLoss} · costas ${robots.backLoss}`);
+  check('robôs novos: Reparador conserta aliados', robots.healed);
+  check('robôs novos: Morteiro, Bastião e Reparador entram em combate', ['bulwark', 'medic', 'mortar'].every((t) => robots.types.includes(t)), robots.types.join(','));
+  await page.screenshot({ path: `${out}/new-robots.png` });
+
+  // Story mode: chapter list, play chapter 1, win it and unlock chapter 2.
+  await page.goto(`${base}/`, { waitUntil: 'domcontentloaded' });
+  await page.locator('#menu').waitFor({ state: 'visible', timeout: 120000 });
+  await page.locator('#story-button').click();
+  await page.locator('#story').waitFor({ state: 'visible' });
+  const storyCards = await page.evaluate(() => ({ total: document.querySelectorAll('.story-card').length, locked: document.querySelectorAll('.story-card.locked').length }));
+  check('história: 5 capítulos, só o primeiro liberado no começo', storyCards.total === 5 && storyCards.locked === 4, `${storyCards.total} capítulos · ${storyCards.locked} bloqueados`);
+  await page.screenshot({ path: `${out}/story.png` });
+  await page.locator('#story-play').click();
+  await page.waitForURL(/story=1/, { timeout: 30000 });
+  await page.locator('#hud').waitFor({ state: 'visible', timeout: 120000 });
+  const mission = await game(page, () => ({ id: window.__mecha.mission?.id, waves: window.__mecha.waves.length }));
+  check('história: capítulo 1 abre com as ondas próprias', mission.id === 1 && mission.waves === 2, `capítulo ${mission.id} · ${mission.waves} ondas`);
+  for (let i = 0; i < 4; i++) {
+    await game(page, () => { const g = window.__mecha; g.setQuality('low'); g.state.health = 100; g.debugSkipWave(); g.debugStep(8); });
+    if (await page.locator('#result').isVisible()) break;
+  }
+  await game(page, () => { const g = window.__mecha; g.debugSkipWave(); g.debugStep(3); });
+  await page.locator('#result').waitFor({ state: 'visible', timeout: 20000 });
+  const storyDone = await page.evaluate(() => ({ progress: localStorage.getItem('mecha-mayhem:story'), text: document.getElementById('result-progress').textContent }));
+  check('história: vencer o capítulo 1 libera o capítulo 2', storyDone.progress === '1' && storyDone.text.includes('LIBERADO'), storyDone.text.slice(0, 80));
+
   // ------------------------------------------------------------------- mobile
   const mobileContext = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
   const mobile = await mobileContext.newPage();
@@ -449,6 +498,36 @@ try {
   await game(mobile, () => window.__mecha.debugStep(0.2));
   await mobile.waitForTimeout(400);
   await mobile.screenshot({ path: `${out}/mobile-landscape.png` });
+
+  // -------------------------------------------------- online: every mode over the real WebSocket server
+  {
+    const wsUrl = `${base.replace(/^http/, 'ws')}/online`;
+    const modeChecks = await Promise.all(['ffa', 'duel', 'team2', 'team5', 'core'].map((mode) => new Promise((resolve) => {
+      const ws = new WebSocket(wsUrl);
+      const r = { mode, welcome: false, players: 0, phase: '', hits: 0, error: '' };
+      const finish = () => { try { ws.close(); } catch {} resolve(r); };
+      ws.on('open', () => ws.send(JSON.stringify({ t: 'hello', v: PROTOCOL_VERSION, name: `SMOKE ${mode}`, palette: 'arctic', weapon: 'mg', mode, map: 'frozen' })));
+      ws.on('message', (raw) => {
+        const m = JSON.parse(String(raw));
+        if (m.t === 'welcome') r.welcome = true;
+        if (m.t === 'snap') { r.players = m.players.length; r.phase = m.phase; }
+        if (m.t === 'hit') r.hits++;
+        if (m.t === 'error') r.error = m.message;
+      });
+      ws.on('error', (e) => { r.error = e.message; finish(); });
+      setTimeout(finish, 16000);
+    })));
+    for (const r of modeChecks) check(`online ${r.mode}: conecta, enche a sala com bots e a partida começa`, r.welcome && r.players === BOT_FILL[r.mode] && ['countdown', 'playing'].includes(r.phase) && !r.error, `${r.players} pilotos · ${r.phase} · ${r.hits} acertos`);
+    check('online: bots combatem nos modos com vários pilotos', modeChecks.filter((r) => r.mode !== 'duel').every((r) => r.hits > 0), modeChecks.map((r) => `${r.mode} ${r.hits}`).join(' · '));
+  }
+  // Idle/backgrounded players are still simulated: spawn protection runs out and the duel bot engages.
+  {
+    const duel = new Room('IDLE', 'duel', false, frozenLayout);
+    const idleHits = [];
+    const idle = duel.join({ send: (m) => { if (m.t === 'hit') idleHits.push(m); }, close() {} }, 'AFK', 'arctic', 'mg');
+    for (let i = 0; i < 26 && !idleHits.length; i++) { for (let k = 0; k < 30; k++) duel.tick(1 / 30); await new Promise((r) => setTimeout(r, 30)); }
+    check('online: jogador parado perde a proteção e o bot do duelo o enfrenta', idle.state.invulnerable === 0 && idleHits.length > 0, `${idleHits.length} acertos`);
+  }
 
   // ------------------------------------------------------------------- online
   await context.close();

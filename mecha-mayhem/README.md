@@ -22,6 +22,13 @@ Jogo 3D de batalha de robôs no navegador, feito com **Babylon.js**, **TypeScrip
 - **30 GLBs no Triverse** não foram gerados: não há `TRIVERSE_API_KEY` nem acesso à conta neste ambiente. Plano e comandos em `docs/TRIVERSE_30_PARTS_PLAN.json`. O robô em jogo usa as peças procedurais (silhueta + cores + detalhes de cada família).
 - Gráficos: revisados por capturas (sem erros); não houve nova passada de materiais/iluminação além das peças de mapa. FPS em GPU real e jogo pela internet não foram testados.
 
+## Modo História, robôs novos e online verificado (novo)
+
+- **Modo História** (aba HISTÓRIA no lobby, `src/game/story.ts`): 5 capítulos da "Operação Vértice" que passam pelos 4 mapas com climas próprios, briefings da Comandante Ilsa, ondas próprias e recompensa em créditos. Cada vitória libera o próximo capítulo (progresso salvo no navegador).
+- **Robôs novos**: **Morteiro** (marca um círculo vermelho no chão e o disparo cai ali: saia do círculo), **Bastião** (escudo frontal que bloqueia ~85% do dano; flanqueie, use explosões ou acerte quando ele baixa o escudo para atirar) e **Reparador** (drone verde com cruz que conserta aliados e foge de você: prioridade). Entram no treino (ondas 2–5) e na história.
+- **Online verificado** pelo servidor WebSocket real em todos os modos (Mata-mata, Duelo, 2v2, 5v5, Core Control) no dev e no `npm start`: a sala enche com bots, a partida começa e há combate. **Bug corrigido**: jogador parado ou com a aba em segundo plano ficava invulnerável para sempre (a proteção de nascimento, o escudo e o dash só contavam tempo quando chegavam comandos). Bots agora também caçam o inimigo mais próximo quando ninguém está à vista.
+- Smoke: **85/85** checks, sem erros de console.
+
 ## Lobby estilo Fortnite e editor de mapas (novo)
 
 - **Menu principal virou um lobby**: abas no topo (JOGAR, OFICINA, PASSE · LOJA, ONLINE, CRIAR MAPA, ⚙), nível e créditos no canto, esquadrão à esquerda (os espaços "+" levam ao online para convidar amigos por sala privada), robô no centro e cartão do modo com o botão amarelo **JOGAR**. Funciona em desktop, celular em pé e deitado.

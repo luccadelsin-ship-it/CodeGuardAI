@@ -101,10 +101,10 @@ interface WaveDef { title: string; subtitle: string; spawns: EnemyType[] }
 
 const WAVES: WaveDef[] = [
   { title: 'ONDA 1', subtitle: 'RECONHECIMENTO', spawns: ['sentinel', 'sentinel', 'wasp'] },
-  { title: 'ONDA 2', subtitle: 'ENXAME', spawns: ['sentinel', 'wasp', 'wasp', 'sentinel', 'wasp'] },
-  { title: 'ONDA 3', subtitle: 'LINHA PESADA', spawns: ['brute', 'sentinel', 'sniper', 'wasp', 'sentinel'] },
-  { title: 'ONDA 4', subtitle: 'ARTILHARIA', spawns: ['sniper', 'brute', 'sentinel', 'wasp', 'sniper', 'wasp', 'sentinel'] },
-  { title: 'ONDA FINAL', subtitle: 'O COLOSSO', spawns: ['boss', 'wasp', 'wasp'] },
+  { title: 'ONDA 2', subtitle: 'ENXAME COM SUPORTE', spawns: ['sentinel', 'wasp', 'wasp', 'sentinel', 'medic'] },
+  { title: 'ONDA 3', subtitle: 'LINHA PESADA', spawns: ['brute', 'sentinel', 'bulwark', 'wasp', 'mortar'] },
+  { title: 'ONDA 4', subtitle: 'ARTILHARIA', spawns: ['sniper', 'brute', 'mortar', 'wasp', 'bulwark', 'medic', 'sentinel'] },
+  { title: 'ONDA FINAL', subtitle: 'O COLOSSO', spawns: ['boss', 'wasp', 'medic'] },
 ];
 
 export class CombatGame {
@@ -275,6 +275,15 @@ export class CombatGame {
     if (this.mode !== 'game') this.state = createMechState(this.state.x, this.state.y, this.state.z, this.yaw, this.weapon, this.chassis);
   }
 
+  /** Active wave list: the training set, or a story chapter's waves. */
+  waves: WaveDef[] = WAVES;
+  /** Story chapter being played (null in free training). */
+  mission: { id: number; title: string; subtitle: string; waves: WaveDef[]; debrief: string } | null = null;
+  setMission(mission: CombatGame['mission']): void {
+    this.mission = mission;
+    this.waves = mission ? mission.waves : WAVES;
+  }
+
   /** What the player has already done this session (beginner tips advance on these). */
   signals = { moved: 0, dashed: false, jumped: false, pad: false, switched: false };
 
@@ -364,8 +373,8 @@ export class CombatGame {
     this.stats = { shots: 0, hits: 0, damageDealt: 0, damageTaken: 0, time: 0, crits: 0 };
     this.world.resetBarrels(true);
     this.setMode('game');
-    this.onBanner?.('TREINAMENTO', `FROZEN OUTPOST · ${DIFFICULTIES[this.difficulty].label}`);
-    this.onToast?.('SOBREVIVA ÀS 5 ONDAS E DERRUBE O COLOSSO');
+    this.onBanner?.(this.mission ? `${this.mission.title} · ${this.mission.subtitle}` : 'TREINAMENTO', DIFFICULTIES[this.difficulty].label);
+    this.onToast?.(this.mission ? `${this.waves.length} ONDAS · ${this.mission.subtitle}` : 'SOBREVIVA ÀS 5 ONDAS E DERRUBE O COLOSSO');
     this.sfx.unlock();
     this.sfx.ambience(true, this.world.theme === 'storm');
     this.updateHud();
@@ -1292,10 +1301,10 @@ export class CombatGame {
   }
 
   private beginWave(index: number): void {
-    if (index >= WAVES.length) return;
+    if (index >= this.waves.length) return;
     this.waveIndex = index;
     this.waveActive = true;
-    const wave = WAVES[index];
+    const wave = this.waves[index];
     const extra: EnemyType[] = this.difficulty === 'elite' && index > 0 ? ['wasp'] : [];
     this.waveQueue = [...wave.spawns, ...extra];
     this.spawnTimer = 0.3;
@@ -1319,7 +1328,7 @@ export class CombatGame {
       this.repairLimbs();
       this.float(this.player.root.position.add(new Vector3(0, 3.8, 0)), `+${repair} REPARO`, 'heal');
     }
-    if (this.waveIndex >= WAVES.length - 1) {
+    if (this.waveIndex >= this.waves.length - 1) {
       this.sfx.victory();
       this.finish(true);
       return;
@@ -1380,18 +1389,18 @@ export class CombatGame {
     if (this.finished) return;
     this.finished = true;
     const accuracy = this.stats.shots ? Math.min(100, Math.round((this.stats.hits / this.stats.shots) * 100)) : 0;
-    const waves = won ? WAVES.length : this.waveActive ? this.waveIndex : this.waveIndex + 1;
+    const waves = won ? this.waves.length : this.waveActive ? this.waveIndex : this.waveIndex + 1;
     const minutes = Math.floor(this.stats.time / 60);
     const seconds = Math.floor(this.stats.time % 60).toString().padStart(2, '0');
     this.pendingResult = {
       won,
-      kicker: won ? 'TREINAMENTO CONCLUÍDO' : 'UNIDADE DESTRUÍDA',
+      kicker: won ? (this.mission ? `${this.mission.title} CONCLUÍDO` : 'TREINAMENTO CONCLUÍDO') : 'UNIDADE DESTRUÍDA',
       title: won ? 'VITÓRIA' : 'DERROTA',
-      detail: won ? `O Colosso caiu. ${DIFFICULTIES[this.difficulty].label} concluído.` : `Abatido por ${cause || 'fogo inimigo'} na ${WAVES[Math.max(0, this.waveIndex)].title.toLowerCase()}.`,
+      detail: won ? (this.mission ? this.mission.debrief : `O Colosso caiu. ${DIFFICULTIES[this.difficulty].label} concluído.`) : `Abatido por ${cause || 'fogo inimigo'} na ${this.waves[Math.max(0, this.waveIndex)].title.toLowerCase()}.`,
       score: this.score,
       difficulty: this.difficulty,
       stats: [
-        ['ONDAS', `${waves} / ${WAVES.length}`],
+        ['ONDAS', `${waves} / ${this.waves.length}`],
         ['ABATES', `${this.kills}`],
         ['PRECISÃO', `${accuracy}%`],
         ['CRÍTICOS', `${this.stats.crits}`],
@@ -1502,14 +1511,14 @@ export class CombatGame {
     let objective: string;
     if (this.session === 'online') objective = this.online?.objective() ?? '';
     else if (this.finished) objective = 'SIMULAÇÃO ENCERRADA';
-    else if (this.waveActive) objective = `${WAVES[this.waveIndex].title} · ${alive} HOSTIS`;
+    else if (this.waveActive) objective = `${this.waves[this.waveIndex].title} · ${alive} HOSTIS`;
     else objective = `${waveNumber > 0 ? 'PRÓXIMA ONDA' : 'PRIMEIRA ONDA'} EM ${Math.ceil(Math.max(0, this.intermission))} S`;
     this.onHud?.({
       session: this.session,
       health: s.health, energy: s.energy, heat: s.heat, overheated: s.overheated,
       charge: WEAPONS[s.weapon].kind === 'charge' ? s.charge / WEAPONS[s.weapon].chargeTime : 0,
       weapon: s.weapon, score: this.score, combo: this.combo, comboTime: this.comboTime, kills: this.kills,
-      wave: waveNumber, waveCount: WAVES.length, enemiesLeft: alive, objective,
+      wave: waveNumber, waveCount: this.waves.length, enemiesLeft: alive, objective,
       dashCooldown: s.dashCd, shieldCooldown: s.shieldCd, impactCooldown: s.impactCd, shield: s.shieldTime > 0,
       fps: this.engine.getFps(),
     });

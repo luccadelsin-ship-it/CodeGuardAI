@@ -172,7 +172,13 @@ export class BotBrain {
         }
       }
     } else if (this.lastKnown) { this.mode = 'hunt'; goal = this.lastKnown; if (Math.hypot(me.x - goal.x, me.z - goal.z) < 2) this.lastKnown = null; }
-    else { this.mode = 'advance'; goal = this.goal && Math.hypot(me.x - this.goal.x, me.z - this.goal.z) > 2 ? this.goal : ctx.nav.randomNode(); }
+    else {
+      // Nobody in sight: hunt the nearest enemy (bots know the arena, like a player reading the radar).
+      const prey = ctx.enemies.reduce<BotTarget | null>((best, e) => !best || Math.hypot(e.state.x - s.x, e.state.z - s.z) < Math.hypot(best.state.x - s.x, best.state.z - s.z) ? e : best, null);
+      this.mode = 'hunt';
+      goal = prey ? { x: prey.state.x, z: prey.state.z } : this.goal && Math.hypot(me.x - this.goal.x, me.z - this.goal.z) > 2 ? this.goal : ctx.nav.randomNode();
+      if (!prey) this.mode = 'advance';
+    }
 
     // Follow the waypoint path.
     if (goal && (!this.goal || Math.hypot(goal.x - this.goal.x, goal.z - this.goal.z) > 2 || ctx.time > this.repathAt)) {

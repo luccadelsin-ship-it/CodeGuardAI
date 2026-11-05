@@ -33,6 +33,7 @@
           <span class="brand-mini"><span class="brand-icon">✦</span> MECHA MAYHEM</span>
           <nav class="hub-nav" aria-label="Menu principal">
             <button class="hub-tab active" id="hub-play-tab">JOGAR</button>
+            <button class="hub-tab story-tab" id="story-button">HISTÓRIA</button>
             <button class="hub-tab" id="garage-button">OFICINA</button>
             <button class="hub-tab" id="progress-button">PASSE · LOJA</button>
             <button class="hub-tab" id="online-button">ONLINE</button>
@@ -64,6 +65,14 @@
           <button id="start-button" class="hub-play"><small>PRONTO</small><strong>JOGAR</strong></button>
         </aside>
         <footer class="hub-footer"><span>W A S D · MOVER &nbsp; MOUSE · MIRAR &nbsp; 1-6 · ARMAS &nbsp; F · IMPACTO</span><button id="credits-button" class="footer-button">CRÉDITOS ↗</button><button id="credits-button-mobile" class="footer-button mobile-credits">CRÉDITOS ↗</button></footer>
+      </section>
+
+      <section id="story" class="screen panel-screen story-screen hidden">
+        <header class="panel-header"><button class="back-button" data-back>← VOLTAR</button><span>MODO HISTÓRIA // OPERAÇÃO VÉRTICE</span><span id="story-count">0/5</span></header>
+        <div class="story-panel">
+          <div class="story-list" id="story-list"></div>
+          <div class="story-brief" id="story-brief"></div>
+        </div>
       </section>
 
       <section id="editor" class="screen panel-screen editor-screen hidden">

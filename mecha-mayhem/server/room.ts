@@ -40,6 +40,8 @@ interface Player {
   charge: number;
   lastHitBy: number;
   brain?: BotBrain;
+  /** Server time of the last processed input frame. */
+  lastInputAt?: number;
 }
 
 interface Missile { id: number; owner: number; pos: Vec; vel: Vec; target: number | null; ttl: number }
@@ -242,6 +244,7 @@ export class Room {
       const frame = p.inputs.shift()!;
       p.budget -= frame.dt;
       p.ack = frame.seq;
+      p.lastInputAt = now();
       if (!p.alive || this.phase === 'ended') continue;
       if (this.phase === 'countdown') { frame.mx = frame.mz = 0; frame.jump = frame.dash = frame.shield = false; }
       stepMech(p.state, frame, frame.dt, this.arena);
@@ -543,6 +546,11 @@ export class Room {
     this.stepBots(dt);
     for (const p of this.players.values()) {
       this.processInputs(p, dt);
+      // Idle or backgrounded clients (no input for 0.3 s) are still simulated with an empty
+      // input, so spawn protection, shield and dash timers run out and gravity applies.
+      if (!p.bot && p.alive && this.phase !== 'ended' && t - (p.lastInputAt ?? 0) > 0.3) {
+        stepMech(p.state, { mx: 0, mz: 0, yaw: p.state.yaw, pitch: p.state.pitch, sprint: false, jump: false, dash: false, shield: false }, dt, this.arena);
+      }
       if (!p.alive && t >= p.respawnAt && this.phase !== 'ended') this.respawn(p);
       p.history.push({ t, x: p.state.x, y: p.state.y, z: p.state.z });
       while (p.history.length && p.history[0].t < t - 1) p.history.shift();
