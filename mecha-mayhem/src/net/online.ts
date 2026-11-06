@@ -4,13 +4,30 @@ import { stepMech, type FireCommand, type MechInput, type MechState } from '../s
 import { WEAPONS, type WeaponId } from '../shared/weapons';
 import type { CombatGame, OnlineBridge, RemoteTarget, ResultInfo } from '../game/combat';
 import { createMech, type MechPalette, type MechVisual } from '../game/mech';
-import { mapFromSearch } from '../shared/maps';
+import { mapFromSearch, type MapId } from '../shared/maps';
+import { launchSearch } from '../game/launch';
 import type { MechPartConfig } from '../shared/customization';
 
 const INTERP_DELAY = 0.1;
 const now = () => performance.now() / 1000;
 
-export interface OnlineOptions { url: string; name: string; palette: MechPalette; weapon: WeaponId; mode: OnlineMode; parts?: MechPartConfig; room?: string; create?: boolean }
+export interface OnlineOptions {
+  url: string; name: string; palette: MechPalette; weapon: WeaponId; mode: OnlineMode; parts?: MechPartConfig; room?: string; create?: boolean;
+  /** Another transport instead of a WebSocket (the Artifact build plays over the claude.ai room). */
+  socket?: () => SocketLike;
+  /** Remote interpolation / lag-compensation delay; slower transports need more. */
+  interpDelay?: number;
+  map?: MapId;
+}
+
+/** The part of the WebSocket API the session uses, so other transports can stand in for it. */
+export interface SocketLike {
+  readonly readyState: number;
+  send(data: string): void;
+  close(): void;
+  addEventListener(type: 'open' | 'error' | 'close', listener: () => void): void;
+  addEventListener(type: 'message', listener: (event: { data: unknown }) => void): void;
+}
 
 export interface ScoreRow { id: number; name: string; kills: number; deaths: number; score: number; ping: number; me: boolean; team: Team }
 
@@ -85,7 +102,8 @@ export class OnlineSession implements OnlineBridge {
     z.fillMat.alpha = this.coreState === 'contested' ? 0.12 + 0.1 * Math.abs(Math.sin(performance.now() / 120)) : 0.16;
     z.ring.rotation.y += dt * 0.4;
   }
-  private ws: WebSocket;
+  private ws: SocketLike;
+  private interp = INTERP_DELAY;
   private readonly remotes = new Map<number, Remote>();
   private readonly pending: InputFrame[] = [];
   private outbox: InputFrame[] = [];
@@ -103,20 +121,21 @@ export class OnlineSession implements OnlineBridge {
   private lastRows: ScoreRow[] = [];
   private sentCharge = 0;
 
-  private constructor(private readonly game: CombatGame, private readonly scene: Scene, ws: WebSocket, private readonly callbacks: OnlineCallbacks) {
+  private constructor(private readonly game: CombatGame, private readonly scene: Scene, ws: SocketLike, private readonly callbacks: OnlineCallbacks) {
     this.ws = ws;
   }
 
   /** Connect, send hello and resolve once the server welcomes us. */
   static connect(game: CombatGame, scene: Scene, options: OnlineOptions, callbacks: OnlineCallbacks): Promise<OnlineSession> {
     return new Promise((resolve, reject) => {
-      let ws: WebSocket;
-      try { ws = new WebSocket(options.url); } catch (error) { reject(error); return; }
+      let ws: SocketLike;
+      try { ws = options.socket ? options.socket() : new WebSocket(options.url); } catch (error) { reject(error); return; }
       const session = new OnlineSession(game, scene, ws, callbacks);
+      session.interp = options.interpDelay ?? INTERP_DELAY;
       const timeout = window.setTimeout(() => { ws.close(); reject(new Error('Tempo esgotado ao conectar ao servidor.')); }, 8000);
       let welcomed = false;
       ws.addEventListener('open', () => {
-        session.send({ t: 'hello', v: PROTOCOL_VERSION, name: options.name, palette: options.palette, weapon: options.weapon, mode: options.mode, map: mapFromSearch(location.search), parts: options.parts, room: options.room, create: options.create });
+        session.send({ t: 'hello', v: PROTOCOL_VERSION, name: options.name, palette: options.palette, weapon: options.weapon, mode: options.mode, map: options.map ?? mapFromSearch(launchSearch), parts: options.parts, room: options.room, create: options.create });
       });
       ws.addEventListener('message', (event) => {
         let message: ServerMessage;
@@ -147,7 +166,7 @@ export class OnlineSession implements OnlineBridge {
   }
 
   private send(message: ClientMessage): void {
-    if (this.ws.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(message));
+    if (this.ws.readyState === 1) this.ws.send(JSON.stringify(message));
   }
 
   private serverNow(): number { return now() + this.offset; }
@@ -162,11 +181,11 @@ export class OnlineSession implements OnlineBridge {
 
   fire(cmd: FireCommand, origin: Vector3, dir: Vector3, seed: number, target?: number): void {
     this.flushInputs();
-    this.send({ t: 'fire', weapon: cmd.weapon, o: [origin.x, origin.y, origin.z], d: [dir.x, dir.y, dir.z], charge: cmd.charge, seed, rt: this.serverNow() - INTERP_DELAY, target });
+    this.send({ t: 'fire', weapon: cmd.weapon, o: [origin.x, origin.y, origin.z], d: [dir.x, dir.y, dir.z], charge: cmd.charge, seed, rt: this.serverNow() - this.interp, target });
   }
 
   weapon(weapon: WeaponId): void { this.send({ t: 'weapon', weapon }); }
-  impact(): void { this.flushInputs(); this.send({ t: 'impact', rt: this.serverNow() - INTERP_DELAY }); }
+  impact(): void { this.flushInputs(); this.send({ t: 'impact', rt: this.serverNow() - this.interp }); }
 
   targets(): RemoteTarget[] {
     return [...this.remotes.values()].map((r) => ({ id: r.info.id, base: r.position, alive: r.alive, name: r.info.name, health: r.hp, invulnerable: r.last?.inv ?? false }));
@@ -221,7 +240,7 @@ export class OnlineSession implements OnlineBridge {
     if (this.phase === 'countdown' || this.phase === 'ended') this.timer = Math.max(0, this.timer - dt);
     else if (this.phase === 'playing') this.timer = Math.max(0, this.timer - dt);
     // Interpolate remote mechs INTERP_DELAY behind the server clock.
-    const renderTime = this.serverNow() - INTERP_DELAY;
+    const renderTime = this.serverNow() - this.interp;
     for (const r of this.remotes.values()) {
       const buffer = r.buffer;
       while (buffer.length > 2 && buffer[1].t <= renderTime) buffer.shift();

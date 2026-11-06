@@ -38,6 +38,8 @@ export class BotNav {
         this.nodes.push({ x: s.x + Math.cos(a) * s.radius * 0.6, z: s.z + Math.sin(a) * s.radius * 0.6 });
       }
     }
+    // Map-authored waypoints (open yards such as Ferro-Velho Titã).
+    for (const p of L.navPoints ?? []) this.nodes.push({ x: p.x, z: p.z });
     // Keep only walkable nodes, then connect visible neighbours.
     for (let i = this.nodes.length - 1; i >= 0; i--) if (!arena.canMoveTo(this.nodes[i].x, this.nodes[i].z, 0.9)) this.nodes.splice(i, 1);
     for (let i = 0; i < this.nodes.length; i++) {

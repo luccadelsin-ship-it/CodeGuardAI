@@ -7,7 +7,12 @@
 export type Vec3 = { x: number; y: number; z: number };
 export type Circle = { x: number; z: number; radius: number; name?: string };
 export type Bridge = { name: string; x: number; z: number; widthX: number; widthZ: number };
-export type Cover = { x: number; z: number; widthX: number; widthZ: number; height: number; id?: string; kind?: 'layout' | 'prop' | 'barricade' | 'block' | 'barrel' | 'pillar' | 'pipe' | 'dais' | 'wall' | 'ore' };
+/**
+ * Collision box standing on the deck. `rot` turns it around Y (local -> world: x' = x cos - z sin, z' = x sin + z cos),
+ * `shape: 'cyl'` makes it a vertical cylinder of diameter widthX. Kind 'step' is a stair tread: it only blocks a
+ * small footprint, so mechs walk up stairs one tread at a time when the arena has a step height.
+ */
+export type Cover = { x: number; z: number; widthX: number; widthZ: number; height: number; id?: string; rot?: number; shape?: 'box' | 'cyl'; name?: string; kind?: 'layout' | 'prop' | 'barricade' | 'block' | 'barrel' | 'pillar' | 'pipe' | 'dais' | 'wall' | 'ore' | 'step' };
 export type Spawn = { x: number; y: number; z: number; yaw: number };
 export type ArenaLayout = {
   visualAsset: string;
@@ -17,6 +22,16 @@ export type ArenaLayout = {
   stations: Circle[];
   cover: Cover[];
   spawns: Spawn[];
+  /** Optional map-authored data (Ferro-Velho Titã): exact spawn points, launch pads, extra bot waypoints. */
+  spawnPoints?: Spawn[];
+  pads?: Array<{ x: number; z: number }>;
+  navPoints?: Array<{ x: number; z: number }>;
+  /** Highest ledge a grounded mech walks onto without jumping (stairs, low plinths). Default 0. */
+  stepHeight?: number;
+  /** The Sketchfab station props are not placed on this map, so their footprints are not cover. */
+  noStationProps?: boolean;
+  /** Glowing team bases for the minimap and lobby preview. */
+  teamBases?: Array<{ team: 'blue' | 'red'; x: number; z: number; radius: number }>;
 };
 
 /** Axis-aligned footprints of the Sketchfab props placed on the stations. */
@@ -47,7 +62,7 @@ export const BUILT_COVER: Cover[] = [
  * Every piece is real collision, cover, standable top and line-of-sight blocker
  * on both the client and the authoritative server (same data, same functions).
  */
-export type ArenaMapId = 'frozen' | 'refinery' | 'neon' | 'canyon';
+export type ArenaMapId = 'frozen' | 'refinery' | 'neon' | 'canyon' | 'scrapyard';
 export const MAP_COVER: Record<ArenaMapId, Cover[]> = {
   // Classic: four diagonal energy barricades and blocks on the bridges.
   frozen: BUILT_COVER,
@@ -79,6 +94,8 @@ export const MAP_COVER: Record<ArenaMapId, Cover[]> = {
     { x: -1.7, z: -5.1, widthX: 1.2, widthZ: 1.2, height: 0.9, kind: 'ore' },
     { x: 7.1, z: -3.3, widthX: 1.5, widthZ: 1.5, height: 1.2, kind: 'ore' },
   ],
+  // Ferro-Velho Titã: every piece comes from the map's own collision volumes (layout.cover).
+  scrapyard: [],
 };
 
 export interface JumpPad { x: number; z: number; radius: number; power: number }
@@ -94,6 +111,7 @@ function bridgeBlocks(layout: ArenaLayout): Cover[] {
 
 /** Launch pads on the inner edge of four stations: a fast vertical route onto cover tops and over lanes. */
 function jumpPadsFor(layout: ArenaLayout): JumpPad[] {
+  if (layout.pads) return layout.pads.map((p) => ({ x: p.x, z: p.z, radius: 1.1, power: 14.5 }));
   return layout.stations.slice(0, 4).map((s) => ({ x: s.x * 0.83, z: s.z * 0.83, radius: 1.1, power: 14.5 }));
 }
 
@@ -111,6 +129,8 @@ export interface Arena {
   dynamicCover: Cover[];
   /** Spawn points used by the online server, spread over the four stations. */
   spawnPoints: Spawn[];
+  /** Ledge height a grounded mech steps onto while walking (0 on maps without stairs). */
+  stepHeight: number;
   onDeck(x: number, z: number, radius: number): boolean;
   /** Footprint check. Cover lower than `feetY` is ignored so mechs can hover over it. */
   canMoveTo(x: number, z: number, radius: number, feetY?: number): boolean;
@@ -124,16 +144,32 @@ export interface Arena {
 }
 
 function coverOverlap(x: number, z: number, radius: number, cover: Cover): boolean {
-  const closestX = Math.max(cover.x - cover.widthX / 2, Math.min(x, cover.x + cover.widthX / 2));
-  const closestZ = Math.max(cover.z - cover.widthZ / 2, Math.min(z, cover.z + cover.widthZ / 2));
-  return (x - closestX) ** 2 + (z - closestZ) ** 2 < radius ** 2;
+  let dx = x - cover.x;
+  let dz = z - cover.z;
+  if (cover.shape === 'cyl') return dx * dx + dz * dz < (cover.widthX / 2 + radius) ** 2;
+  if (cover.rot) {
+    const c = Math.cos(cover.rot), s = Math.sin(cover.rot);
+    [dx, dz] = [dx * c + dz * s, -dx * s + dz * c];
+  }
+  const closestX = Math.max(-cover.widthX / 2, Math.min(dx, cover.widthX / 2));
+  const closestZ = Math.max(-cover.widthZ / 2, Math.min(dz, cover.widthZ / 2));
+  return (dx - closestX) ** 2 + (dz - closestZ) ** 2 < radius ** 2;
 }
 
 function rayBox(origin: Vec3, dir: Vec3, maxDistance: number, deckY: number, cover: Cover): number | null {
-  const min = [cover.x - cover.widthX / 2, deckY - 0.4, cover.z - cover.widthZ / 2];
-  const max = [cover.x + cover.widthX / 2, deckY + cover.height, cover.z + cover.widthZ / 2];
-  const start = [origin.x, origin.y, origin.z];
-  const step = [dir.x, dir.y, dir.z];
+  // Cylinders use their inscribed square for sight lines; rotated boxes are tested in their own frame.
+  const hx = cover.shape === 'cyl' ? cover.widthX * 0.42 : cover.widthX / 2;
+  const hz = cover.shape === 'cyl' ? cover.widthX * 0.42 : cover.widthZ / 2;
+  let ox = origin.x - cover.x, oz = origin.z - cover.z, dx = dir.x, dz = dir.z;
+  if (cover.rot && cover.shape !== 'cyl') {
+    const c = Math.cos(cover.rot), s = Math.sin(cover.rot);
+    [ox, oz] = [ox * c + oz * s, -ox * s + oz * c];
+    [dx, dz] = [dx * c + dz * s, -dx * s + dz * c];
+  }
+  const min = [-hx, deckY - 0.4, -hz];
+  const max = [hx, deckY + cover.height, hz];
+  const start = [ox, origin.y, oz];
+  const step = [dx, dir.y, dz];
   let near = 0;
   let far = maxDistance;
   for (let axis = 0; axis < 3; axis++) {
@@ -169,7 +205,7 @@ export const EDITOR_PIECES: Record<string, { label: string; widthX: number; widt
 export function sanitizeCustomMap(value: unknown): CustomMap | null {
   if (!value || typeof value !== 'object') return null;
   const v = value as Partial<CustomMap>;
-  const bases: ArenaMapId[] = ['frozen', 'refinery', 'neon', 'canyon'];
+  const bases: ArenaMapId[] = ['frozen', 'refinery', 'neon', 'canyon', 'scrapyard'];
   const base = bases.includes(v.base as ArenaMapId) ? v.base as ArenaMapId : 'frozen';
   const num = (n: unknown, lo: number, hi: number) => Math.max(lo, Math.min(hi, Number(n) || 0));
   const kinds = new Set(['barricade', 'block', 'wall', 'pillar', 'pipe', 'ore', 'dais']);
@@ -184,11 +220,11 @@ export function createArena(layout: ArenaLayout, options: { builtCover?: boolean
   const deckY = layout.deckTopY;
   const mapId = options.mapId ?? 'frozen';
   const custom = options.custom ?? null;
-  const builtCover: Cover[] = options.builtCover === false ? [] : custom ? custom.cover.map((c) => ({ ...c })) : [...(MAP_COVER[mapId] ?? BUILT_COVER), ...(mapId === 'frozen' ? [] : bridgeBlocks(layout))];
+  const builtCover: Cover[] = options.builtCover === false ? [] : custom ? custom.cover.map((c) => ({ ...c })) : [...(MAP_COVER[mapId] ?? BUILT_COVER), ...(mapId === 'frozen' || mapId === 'scrapyard' ? [] : bridgeBlocks(layout))];
   const jumpPads = custom ? custom.pads.map((p) => ({ x: p.x, z: p.z, radius: 1.1, power: 14.5 })) : jumpPadsFor(layout);
   const staticCover: Cover[] = [
-    ...layout.cover.map((cover) => ({ ...cover, kind: 'layout' as const })),
-    ...PROP_COVER,
+    ...layout.cover.map((cover) => ({ ...cover, kind: cover.kind === 'step' ? 'step' as const : 'layout' as const })),
+    ...(layout.noStationProps ? [] : PROP_COVER),
     ...builtCover,
   ];
   const dynamicCover: Cover[] = [];
@@ -204,8 +240,8 @@ export function createArena(layout: ArenaLayout, options: { builtCover?: boolean
     });
   };
 
-  const spawnPoints: Spawn[] = [];
-  for (const station of layout.stations) {
+  const spawnPoints: Spawn[] = layout.spawnPoints ? layout.spawnPoints.map((p) => ({ ...p, y: deckY })) : [];
+  if (!layout.spawnPoints) for (const station of layout.stations) {
     const yaw = Math.atan2(-station.x, -station.z);
     const sideX = Math.cos(yaw);
     const sideZ = -Math.sin(yaw);
@@ -225,12 +261,13 @@ export function createArena(layout: ArenaLayout, options: { builtCover?: boolean
     staticCover,
     dynamicCover,
     spawnPoints,
+    stepHeight: layout.stepHeight ?? 0,
     onDeck,
     canMoveTo(x, z, radius, feetY = deckY) {
       if (!onDeck(x, z, radius)) return false;
       for (const cover of allCover()) {
         if (feetY >= deckY + cover.height - 0.05) continue;
-        if (coverOverlap(x, z, radius, cover)) return false;
+        if (coverOverlap(x, z, cover.kind === 'step' ? Math.min(radius, 0.35) : radius, cover)) return false;
       }
       return true;
     },
@@ -262,7 +299,7 @@ export function createArena(layout: ArenaLayout, options: { builtCover?: boolean
     },
     randomDeckPoint(random = Math.random, near) {
       for (let attempt = 0; attempt < 80; attempt++) {
-        const x = near ? near.x + (random() * 2 - 1) * near.radius : (random() * 2 - 1) * 34;
+        const x = near ? near.x + (random() * 2 - 1) * near.radius : (random() * 2 - 1) * 38;
         const z = near ? near.z + (random() * 2 - 1) * near.radius : (random() * 2 - 1) * 34;
         if (arena.canMoveTo(x, z, 1.1)) return { x, z };
       }

@@ -98,6 +98,8 @@ class NavGraph {
       const a = i * Math.PI / 4 + Math.PI / 8;
       this.nodes.push(new Vector3(Math.cos(a) * 7.6, y, Math.sin(a) * 7.6));
     }
+    // Map-authored waypoints (open yards), kept only where a drone fits.
+    for (const p of arena.layout.navPoints ?? []) if (arena.canMoveTo(p.x, p.z, 0.9)) this.nodes.push(new Vector3(p.x, y, p.z));
     for (let i = 0; i < this.nodes.length; i++) {
       this.edges.push([]);
       for (let j = 0; j < this.nodes.length; j++) {

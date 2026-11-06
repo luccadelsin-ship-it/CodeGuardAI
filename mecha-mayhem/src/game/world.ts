@@ -187,6 +187,98 @@ function setCheapMaterials(scene: Scene, cheap: boolean): void {
 }
 
 /** Load the Blender-authored arena and dress it with new cover, props, weather and lighting themes. */
+/**
+ * Ramp colours of the procedural Blender materials (noise -> colour ramp), so the game shows the same
+ * worn paint, rust and concrete. The GLB keeps the material names; looks are rebuilt here with a shared
+ * grunge texture (the Blender noise is not exportable to glTF).
+ */
+const AUTHORED_LOOKS: Record<string, { dark: string; light: string; spec?: number; glow?: boolean }> = {
+  'Aco industrial riscado': { dark: '#121718', light: '#5a6a70', spec: 0.45 },
+  'Agua oleosa': { dark: '#0a0d0e', light: '#1c2224', spec: 0.9 },
+  'Amarelo seguranca desgastado': { dark: '#6d3a08', light: '#e9a93a', spec: 0.3 },
+  'Azul naval descascado': { dark: '#0b2c38', light: '#2f7f99', spec: 0.3 },
+  'Borracha e aco escurecido': { dark: '#08090a', light: '#2a3033', spec: 0.25 },
+  'Concreto poroso': { dark: '#3d3d39', light: '#a3a59c', spec: 0.08 },
+  'Erva seca': { dark: '#33380f', light: '#7c8a33', spec: 0.05 },
+  'Lampadas ambar': { dark: '#ff8d2a', light: '#ffb466', glow: true },
+  'Luzes ciano': { dark: '#2fb8ff', light: '#8fe4ff', glow: true },
+  'Luzes rubras': { dark: '#ff3a24', light: '#ff8a70', glow: true },
+  'Marcacao marfim': { dark: '#8e8466', light: '#e4dcbb', spec: 0.15 },
+  'Metal exposto': { dark: '#4a5150', light: '#b8c2c0', spec: 0.6 },
+  'Oxidacao cobre e ferrugem': { dark: '#3a1407', light: '#a8532a', spec: 0.2 },
+  'Terra e cascalho': { dark: '#231a10', light: '#7a6448', spec: 0.04 },
+  'Vermelho industrial': { dark: '#3d0c05', light: '#b8321b', spec: 0.25 },
+};
+
+function grungeTexture(scene: Scene): DynamicTexture {
+  // Tileable value noise in two octaves: large stains plus fine speckle, 0.6..1 brightness.
+  const size = 256;
+  const tex = new DynamicTexture('authored-grunge', { width: size, height: size }, scene, true);
+  const ctx = tex.getContext() as CanvasRenderingContext2D;
+  const img = ctx.createImageData(size, size);
+  const lattice = (n: number, seed: number) => Array.from({ length: n * n }, (_, i) => { const v = Math.sin((i + seed) * 127.1 + seed * 311.7) * 43758.5453; return v - Math.floor(v); });
+  const coarse = lattice(8, 1), fine = lattice(32, 7);
+  const sample = (grid: number[], n: number, x: number, y: number) => {
+    const gx = (x / size) * n, gy = (y / size) * n, x0 = Math.floor(gx), y0 = Math.floor(gy), fx = gx - x0, fy = gy - y0;
+    const at = (i: number, j: number) => grid[((j % n + n) % n) * n + ((i % n + n) % n)];
+    const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+    return (at(x0, y0) * (1 - sx) + at(x0 + 1, y0) * sx) * (1 - sy) + (at(x0, y0 + 1) * (1 - sx) + at(x0 + 1, y0 + 1) * sx) * sy;
+  };
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    const v = 0.6 + 0.4 * Math.min(1, Math.max(0, (sample(coarse, 8, x, y) * 0.75 + sample(fine, 32, x, y) * 0.25 - 0.15) / 0.7));
+    const i = (y * size + x) * 4;
+    img.data[i] = img.data[i + 1] = img.data[i + 2] = Math.round(v * 255); img.data[i + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+  tex.update();
+  tex.wrapU = tex.wrapV = Texture.WRAP_ADDRESSMODE;
+  return tex;
+}
+
+/** Load a map scene exported from Blender (one mesh per material) and restyle its materials. */
+async function loadAuthoredMap(scene: Scene, file: string, shadows: ShadowGenerator): Promise<Array<AbstractMesh | TransformNode>> {
+  const model = modelFile(file);
+  const result = await SceneLoader.ImportMeshAsync('', 'assets/models/', model.file, scene, undefined, model.ext);
+  const root = result.meshes.find((m) => m.name === '__root__');
+  // Blender floor top sits 7.5 cm below zero; lift it so the deck is exactly y = 0.
+  if (root) {
+    root.position.y += 0.075;
+    // The glTF importer lands Blender (x, y, z) at (-x, z, -y); mirror X so the scene matches the
+    // collision volumes, which use game = (x, z, -y) like the layout files.
+    root.scaling.x *= -1;
+  }
+  const grunge = grungeTexture(scene);
+  const looks = new Map<string, StandardMaterial>();
+  for (const mesh of result.meshes) {
+    mesh.isPickable = false;
+    const old = mesh.material;
+    if (!old) continue;
+    let mat = looks.get(old.name);
+    if (!mat) {
+      const look = AUTHORED_LOOKS[old.name] ?? { dark: '#333333', light: '#999999' };
+      mat = new StandardMaterial(`authored:${old.name}`, scene);
+      if (look.glow) {
+        mat.emissiveColor = Color3.FromHexString(look.dark);
+        mat.diffuseColor = Color3.FromHexString(look.light);
+        mat.disableLighting = true;
+      } else {
+        mat.diffuseColor = Color3.FromHexString(look.light);
+        mat.diffuseTexture = grunge;
+        mat.specularColor = new Color3(1, 1, 1).scale(look.spec ?? 0.2);
+        mat.specularPower = 24 + (look.spec ?? 0.2) * 90;
+        mat.ambientColor = Color3.FromHexString(look.dark).scale(1.4);
+      }
+      looks.set(old.name, mat);
+    }
+    mesh.material = mat;
+    old.dispose(false, true);
+    mesh.receiveShadows = true;
+    // Ground, concrete and markings only receive; props and structures cast.
+    if (!/Terra|Concreto|Marcacao|Agua|Erva|Luzes|Lampadas/.test(old.name)) shadows.addShadowCaster(mesh);
+  }
+  return [...result.meshes, ...result.transformNodes];
+}
+
 export async function createWorld(scene: Scene, onProgress?: (label: string) => void, mapId: MapId = 'frozen', custom: CustomMap | null = null): Promise<World> {
   const ownedMeshes: AbstractMesh[] = [];
   const importedNodes: Array<AbstractMesh | TransformNode> = [];
@@ -224,6 +316,8 @@ export async function createWorld(scene: Scene, onProgress?: (label: string) => 
     const arenaImport = await SceneLoader.ImportMeshAsync('', 'assets/models/', arenaModel.file, scene, undefined, arenaModel.ext);
     importedNodes.push(...arenaImport.meshes, ...arenaImport.transformNodes);
     for (const mesh of arenaImport.meshes) { mesh.receiveShadows = true; mesh.isPickable = false; }
+  } else if (layout.visualAsset.startsWith('glb:')) {
+    importedNodes.push(...await loadAuthoredMap(scene, layout.visualAsset.slice(4), shadows));
   } else {
     const steel = material(scene, `${mapId}-steel`, mapId === 'neon' ? '#172b48' : mapId === 'canyon' ? '#ad805b' : '#35414b', false, 0.4);
     const copper = material(scene, `${mapId}-trim`, mapId === 'neon' ? '#643579' : mapId === 'canyon' ? '#71412b' : '#a8582b', false, 0.5);
@@ -338,6 +432,21 @@ export async function createWorld(scene: Scene, onProgress?: (label: string) => 
         place(signT[i % 3], p.x - Math.sin(face) * -2.6, ground + h * 0.7, p.z - Math.cos(face) * -2.6, 3.6, 1.2, 0.15, face);
         if (i % 5 === 0) { place(crane, p.x, ground + h + 4, p.z, 0.6, 8, 0.6); const arm = place(crane, p.x, ground + h + 8, p.z, 0.5, 0.5, 12, face); spinners.push(arm); }
       });
+    } else if (mapId === 'scrapyard') {
+      // Junk stacks and floodlight masts on the sand around the yard.
+      const crate = template(MeshBuilder.CreateBox('dress-junk-container', { size: 1 }, scene), mat('junk-rust', '#7a3a22'));
+      const crateBlue = template(MeshBuilder.CreateBox('dress-junk-container-blue', { size: 1 }, scene), mat('junk-blue', '#1f4a5c'));
+      const mast = template(MeshBuilder.CreateCylinder('dress-flood-mast', { diameter: 1, height: 1, tessellation: 6 }, scene), mat('mast', '#3a3f42'));
+      const lamp = mat('flood', '#ffc46a', true); blinkers.push(lamp);
+      const head = template(MeshBuilder.CreateBox('dress-flood-head', { size: 1 }, scene), lamp);
+      spots.forEach((p, i) => {
+        const face = Math.atan2(-p.x, -p.z);
+        if (i % 4 === 0) { place(mast, p.x, ground + 8, p.z, 0.4, 16, 0.4); place(head, p.x, ground + 16.2, p.z, 1.8, 0.5, 0.9, face); }
+        else {
+          const levels = 1 + (i % 3);
+          for (let k = 0; k < levels; k++) place(k % 2 ? crateBlue : crate, p.x + (k % 2) * 0.6, ground + 1.3 + k * 2.6, p.z, 6, 2.6, 2.5, face + k * 0.12);
+        }
+      });
     } else {
       const spire = template(MeshBuilder.CreateCylinder('dress-spire', { diameterTop: 0.35, diameterBottom: 1, height: 1, tessellation: 7 }, scene), mat('rock', '#a86a42'));
       const rig = template(MeshBuilder.CreateBox('dress-rig', { size: 1 }, scene), mat('rig', '#4a3d34'));
@@ -381,9 +490,13 @@ export async function createWorld(scene: Scene, onProgress?: (label: string) => 
     collider(mesh, PhysicsShapeType.BOX);
   }
   for (const [i, c] of arena.staticCover.entries()) {
-    const mesh = MeshBuilder.CreateBox(`collision:cover-${i}`, { width: c.widthX, depth: c.widthZ, height: c.height }, scene);
+    const cyl = c.shape === 'cyl';
+    const mesh = cyl
+      ? MeshBuilder.CreateCylinder(`collision:cover-${i}`, { diameter: c.widthX, height: c.height, tessellation: 16 }, scene)
+      : MeshBuilder.CreateBox(`collision:cover-${i}`, { width: c.widthX, depth: c.widthZ, height: c.height }, scene);
     mesh.position.set(c.x, deckY + c.height / 2, c.z);
-    collider(mesh, PhysicsShapeType.BOX);
+    mesh.rotation.y = -(c.rot ?? 0);
+    collider(mesh, cyl ? PhysicsShapeType.CYLINDER : PhysicsShapeType.BOX);
   }
 
   // New procedural cover: energy barricades in the ring and armoured blocks on the bridges.
@@ -522,7 +635,7 @@ export async function createWorld(scene: Scene, onProgress?: (label: string) => 
   const beaconMat = material(scene, 'pylon-beacon', '#61e8ff', true);
   accentMaterials.push(beaconMat);
   const beacons: Mesh[] = [];
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < (layout.noStationProps ? 0 : 4); i++) {
     const angle = Math.PI / 4 + i * Math.PI / 2;
     const pylon = MeshBuilder.CreateCylinder(`pylon-${i}`, { diameterTop: 0.18, diameterBottom: 0.42, height: 3.4, tessellation: 8 }, scene);
     pylon.position.set(Math.cos(angle) * 10.2, deckY + 1.7, Math.sin(angle) * 10.2);
@@ -555,6 +668,7 @@ export async function createWorld(scene: Scene, onProgress?: (label: string) => 
     for (const mesh of node.getChildMeshes()) shadows.addShadowCaster(mesh);
     props.push(node);
   };
+  if (!layout.noStationProps) {
   place(cargo, 'cargo_crate', 28.7, -5.1, deckY, 0.2);
   place(loot, 'loot_crate', -28.8, 5.1, deckY, 0.65);
   place(barrel, 'energy_barrel', 4.9, 27.5, deckY, 0);
@@ -575,10 +689,11 @@ export async function createWorld(scene: Scene, onProgress?: (label: string) => 
       towerIsland.position.set(side * 40, -5.065, -side * 25); towerIsland.material = plate; towerIsland.isPickable = false; towerIsland.receiveShadows = true; ownedMeshes.push(towerIsland);
     }
   }
+  }
 
   // Explosive barrels (training mode). They are real cover until destroyed.
   // Barrels never spawn inside placed pieces (custom maps can put cover anywhere).
-  const barrelSpots = BARREL_SPOTS.filter(([x, z]) => !arena.builtCover.some((c) => Math.abs(c.x - x) * 2 < c.widthX + 1.2 && Math.abs(c.z - z) * 2 < c.widthZ + 1.2) && !arena.jumpPads.some((p) => Math.hypot(p.x - x, p.z - z) < 2));
+  const barrelSpots = BARREL_SPOTS.filter(([x, z]) => arena.canMoveTo(x, z, 0.9)).filter(([x, z]) => !arena.builtCover.some((c) => Math.abs(c.x - x) * 2 < c.widthX + 1.2 && Math.abs(c.z - z) * 2 < c.widthZ + 1.2) && !arena.jumpPads.some((p) => Math.hypot(p.x - x, p.z - z) < 2));
   const barrels: Barrel[] = barrelSpots.map(([x, z], id) => {
     const node = barrel ? instantiate(barrel, `explosive-barrel-${id}`) : new TransformNode(`explosive-barrel-${id}`, scene);
     node.position.set(x, deckY, z);

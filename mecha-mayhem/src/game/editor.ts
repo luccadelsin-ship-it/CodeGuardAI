@@ -172,7 +172,12 @@ export class MapEditor {
     circle(L.centralArena.x, L.centralArena.z, L.centralArena.radius);
     for (const st of L.stations) circle(st.x, st.z, st.radius);
     for (const b of L.bridges) ctx.fillRect(px(b.x - b.widthX / 2), pz(b.z + b.widthZ / 2), b.widthX * s, b.widthZ * s);
-    const box = (c: { x: number; z: number; widthX: number; widthZ: number }, fill: string) => { ctx.fillStyle = fill; ctx.fillRect(px(c.x - c.widthX / 2), pz(c.z + c.widthZ / 2), c.widthX * s, c.widthZ * s); };
+    const box = (c: { x: number; z: number; widthX: number; widthZ: number; rot?: number; shape?: string }, fill: string) => {
+      ctx.fillStyle = fill;
+      if (c.shape === 'cyl') { ctx.beginPath(); ctx.arc(px(c.x), pz(c.z), (c.widthX / 2) * s, 0, Math.PI * 2); ctx.fill(); return; }
+      ctx.save(); ctx.translate(px(c.x), pz(c.z)); ctx.rotate(-(c.rot ?? 0)); // canvas Y points to -z
+      ctx.fillRect((-c.widthX / 2) * s, (-c.widthZ / 2) * s, c.widthX * s, c.widthZ * s); ctx.restore();
+    };
     for (const c of this.arena.staticCover) if (!this.map.cover.some((m) => m.x === c.x && m.z === c.z && m.kind === c.kind)) box(c, '#4b5d69');
     const colors: Record<string, string> = { barricade: '#61e8ff', block: '#9fc3d6', wall: '#fa74ff', pillar: '#ffb347', pipe: '#ff7937', ore: '#d99a5b', dais: '#5dffa8' };
     for (const c of this.map.cover) box(c, colors[c.kind ?? 'block'] ?? '#fff');

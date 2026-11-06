@@ -152,7 +152,27 @@ const jumper = createMechState(pad.x, padArena.deckY, pad.z, 0);
 for (let i = 0; i < 12; i++) stepMech(jumper, { mx: 0, mz: 0, yaw: 0, pitch: 0, sprint: false, jump: false, dash: false, shield: false }, 1 / 30, padArena);
 check('mapas: plataforma de salto lança o mecha (regra compartilhada)', jumper.y > padArena.deckY + 2 && padArena.jumpPads.length === 4, `altura ${(jumper.y - padArena.deckY).toFixed(1)} m`);
 check('mapas: pontes dos mapas procedurais têm cobertura', padArena.builtCover.filter((c) => c.kind === 'block').length === refineryLayout.bridges.length);
-check('mapas: cada arena tem coberturas centrais próprias', new Set(Object.values(MAP_COVER).map((c) => JSON.stringify(c))).size === 4);
+check('mapas: cada arena tem coberturas centrais próprias', new Set(Object.values(MAP_COVER).map((c) => JSON.stringify(c))).size === Object.keys(MAP_COVER).length);
+// Ferro-Velho Titã: collision volumes authored in Blender, shared by client prediction, server and bots.
+const scrapLayout = JSON.parse(readFileSync('public/assets/models/scrapyard.layout.json', 'utf8'));
+const scrap = createArena(scrapLayout, { mapId: 'scrapyard' });
+const walkScrap = (x, z, yaw, seconds) => { const s = createMechState(x, scrap.deckY, z, yaw); for (let t = 0; t < seconds; t += 1 / 30) stepMech(s, { mx: 0, mz: 1, yaw, pitch: 0, sprint: false, jump: false, dash: false, shield: false }, 1 / 30, scrap); return s; };
+check('ferro-velho: 88 volumes de colisão do Blender e 12 nascimentos livres', scrap.staticCover.length === 88 && scrap.spawnPoints.length === 12 && scrap.spawnPoints.every((p) => scrap.canMoveTo(p.x, p.z, 0.8)));
+const climber = walkScrap(-30, -9.5, Math.PI, 3);
+check('ferro-velho: escada da torre sobe andando até a plataforma', climber.y > 6.3, `altura ${climber.y.toFixed(2)} m`);
+const blocked = walkScrap(-23, 12, 0, 4);
+check('ferro-velho: contêiner girado bloqueia o mecha', blocked.z < 15.5 && blocked.z > 14.5, `parou em z ${blocked.z.toFixed(2)}`);
+check('ferro-velho: contêiner bloqueia linha de visão; pátio aberto não', !scrap.lineOfSight({ x: -23, y: 1.5, z: 12 }, { x: -23, y: 1.5, z: 24 }) && scrap.lineOfSight({ x: -5, y: 1.5, z: -10 }, { x: 5, y: 1.5, z: -10 }));
+check('ferro-velho: outros mapas sem degrau automático', createArena(frozenLayout).stepHeight === 0 && scrap.stepHeight === 0.45);
+const scrapRoom = new Room('SCRP', 'team5', false, scrapLayout, 'scrapyard');
+scrapRoom.join(noop, 'SCRAP', 'arctic', 'mg');
+for (let i = 0; i < 90; i++) scrapRoom.tick(1 / 30);
+scrapRoom.phase = 'playing'; scrapRoom.timer = 300;
+const scrapStart = new Map([...scrapRoom.players.values()].filter((p) => p.bot).map((p) => [p.id, { x: p.state.x, z: p.state.z }]));
+for (let i = 0; i < 300; i++) scrapRoom.tick(1 / 30);
+const scrapMoved = [...scrapRoom.players.values()].filter((p) => p.bot && scrapStart.has(p.id) && Math.hypot(p.state.x - scrapStart.get(p.id).x, p.state.z - scrapStart.get(p.id).z) > 3).length;
+const scrapInside = [...scrapRoom.players.values()].every((p) => scrap.onDeck(p.state.x, p.state.z, 0.5));
+check('ferro-velho: bots do servidor navegam no pátio', scrapMoved >= 6 && scrapInside, `${scrapMoved}/9 se moveram`);
 const refinery = createArena(refineryLayout);
 check('segundo mapa: layout de refinaria tem pontes e coberturas', refinery.layout.visualAsset === 'procedural:refinery' && refinery.layout.bridges.length === 4 && refinery.staticCover.length > 8);
 function watch(page, label) {
@@ -182,7 +202,7 @@ try {
   check('treino: dificuldade inicial Recruta', await game(page, () => window.__mecha.difficulty) === 'recruit');
   await page.locator('#lobby-button').click();
   await page.locator('#lobby').waitFor({ state: 'visible' });
-  check('lobby: quatro arenas e preparação da missão', await page.locator('#lobby-maps .map-card').count() === 4 && await page.locator('#lobby-launch').isVisible());
+  check('lobby: cinco arenas e preparação da missão', await page.locator('#lobby-maps .map-card').count() === 5 && await page.locator('#lobby-launch').isVisible());
   await page.screenshot({ path: `${out}/lobby.png` });
   await page.locator('#lobby-customize').click();
   await page.locator('.part-tab[data-slot="head"]').click();
@@ -424,7 +444,7 @@ try {
   check('celular: menu cabe em 390×844', menuFits);
   await mobile.locator('#lobby-button').tap();
   const lobbyFits = await mobile.evaluate(() => { const panel = document.querySelector('.lobby-panel'); const r = panel.getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth && panel.scrollWidth <= panel.clientWidth + 1; });
-  check('celular: lobby cabe em 390×844 e permite rolagem', lobbyFits && await mobile.locator('#lobby-maps .map-card').count() === 4);
+  check('celular: lobby cabe em 390×844 e permite rolagem', lobbyFits && await mobile.locator('#lobby-maps .map-card').count() === 5);
   await mobile.screenshot({ path: `${out}/mobile-lobby.png` });
   await mobile.locator('#lobby [data-back]').tap();
   await mobile.locator('#garage-button').tap();
@@ -502,11 +522,12 @@ try {
   // -------------------------------------------------- online: every mode over the real WebSocket server
   {
     const wsUrl = `${base.replace(/^http/, 'ws')}/online`;
-    const modeChecks = await Promise.all(['ffa', 'duel', 'team2', 'team5', 'core'].map((mode) => new Promise((resolve) => {
+    const modeChecks = await Promise.all(['ffa', 'duel', 'team2', 'team5', 'core', 'core@scrapyard'].map((entry) => new Promise((resolve) => {
+      const [mode, mapName = 'frozen'] = entry.split('@');
       const ws = new WebSocket(wsUrl);
-      const r = { mode, welcome: false, players: 0, phase: '', hits: 0, error: '' };
+      const r = { mode: entry, base: mode, welcome: false, players: 0, phase: '', hits: 0, error: '' };
       const finish = () => { try { ws.close(); } catch {} resolve(r); };
-      ws.on('open', () => ws.send(JSON.stringify({ t: 'hello', v: PROTOCOL_VERSION, name: `SMOKE ${mode}`, palette: 'arctic', weapon: 'mg', mode, map: 'frozen' })));
+      ws.on('open', () => ws.send(JSON.stringify({ t: 'hello', v: PROTOCOL_VERSION, name: `SMOKE ${mode}`, palette: 'arctic', weapon: 'mg', mode, map: mapName })));
       ws.on('message', (raw) => {
         const m = JSON.parse(String(raw));
         if (m.t === 'welcome') r.welcome = true;
@@ -517,7 +538,7 @@ try {
       ws.on('error', (e) => { r.error = e.message; finish(); });
       setTimeout(finish, 16000);
     })));
-    for (const r of modeChecks) check(`online ${r.mode}: conecta, enche a sala com bots e a partida começa`, r.welcome && r.players === BOT_FILL[r.mode] && ['countdown', 'playing'].includes(r.phase) && !r.error, `${r.players} pilotos · ${r.phase} · ${r.hits} acertos`);
+    for (const r of modeChecks) check(`online ${r.mode}: conecta, enche a sala com bots e a partida começa`, r.welcome && r.players === BOT_FILL[r.base] && ['countdown', 'playing'].includes(r.phase) && !r.error, `${r.players} pilotos · ${r.phase} · ${r.hits} acertos`);
     check('online: bots combatem nos modos com vários pilotos', modeChecks.filter((r) => r.mode !== 'duel').every((r) => r.hits > 0), modeChecks.map((r) => `${r.mode} ${r.hits}`).join(' · '));
   }
   // Idle/backgrounded players are still simulated: spawn protection runs out and the duel bot engages.
@@ -591,6 +612,26 @@ try {
     const walkable = await game(refineryPage, () => { const g = window.__mecha; return g.world.arena.onDeck(g.state.x, g.state.z, 0.8) && g.state.health > 0; });
     check(`mapa ${id}: missão inicia com jogador em plataforma`, walkable);
   }
+  // Ferro-Velho Titã: picked from the lobby (relaunch), detailed Blender scene, collisions in the browser.
+  await refineryPage.goto(`${base}/?map=canyon&lobby=1&debug`, { waitUntil: 'domcontentloaded' });
+  await refineryPage.locator('#lobby').waitFor({ state: 'visible', timeout: 120000 });
+  await refineryPage.locator('.map-card[data-map="scrapyard"]').click();
+  await refineryPage.waitForFunction(() => window.__mecha?.world?.arena?.layout?.visualAsset === 'glb:ferro_velho_tita.glb', null, { timeout: 120000 });
+  await refineryPage.locator('#lobby').waitFor({ state: 'visible', timeout: 120000 });
+  const scrapScene = await game(refineryPage, () => ({ parts: window.__mecha.scene.meshes.filter((m) => m.name.startsWith('scrap:')).length, verts: window.__mecha.scene.meshes.filter((m) => m.name.startsWith('scrap:')).reduce((n, m) => n + m.getTotalVertices(), 0), tag: document.querySelector('#map-tag').textContent }));
+  check('ferro-velho: troca de mapa no lobby carrega a cena detalhada do Blender', scrapScene.parts >= 14 && scrapScene.verts > 50000 && scrapScene.tag.includes('FERRO-VELHO'), `${scrapScene.parts} malhas · ${scrapScene.verts} vértices`);
+  await refineryPage.locator('#lobby-launch').click();
+  const scrapPlay = await game(refineryPage, () => {
+    const g = window.__mecha;
+    g.state.x = -23; g.state.z = 12; g.state.y = 0; g.yaw = 0;
+    return true;
+  });
+  await refineryPage.keyboard.down('KeyW');
+  await game(refineryPage, () => window.__mecha.debugStep(3));
+  await refineryPage.keyboard.up('KeyW');
+  const scrapAfter = await game(refineryPage, () => ({ z: window.__mecha.state.z, hp: window.__mecha.state.health, mode: window.__mecha.mode }));
+  check('ferro-velho: no navegador o contêiner bloqueia o jogador', scrapPlay && scrapAfter.mode === 'game' && scrapAfter.z < 15.6 && scrapAfter.hp > 0, `z ${scrapAfter.z.toFixed(2)}`);
+  await refineryPage.screenshot({ path: `${out}/map-scrapyard.png` });
 } catch (error) {
   errors.push(`SMOKE: ${error instanceof Error ? error.stack : error}`);
 }

@@ -322,11 +322,26 @@ function drawRadar(radar: RadarState): void {
   ctx.fillStyle = 'rgba(120,200,230,0.08)';
   ctx.lineWidth = 1;
   const circle = (x: number, z: number, r: number) => { const [px, py] = toMap(x, z); ctx.beginPath(); ctx.arc(px, py, r * scale, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); };
+  const L = game.world.arena.layout;
+  if (L.teamBases) {
+    // Authored yard: outline, team bases and the large structures as landmarks.
+    for (const b of L.bridges) { const [px, py] = toMap(b.x, b.z); ctx.strokeRect(px - (b.widthX / 2) * scale, py - (b.widthZ / 2) * scale, b.widthX * scale, b.widthZ * scale); }
+    circle(0, 0, 7.5);
+    for (const b of L.teamBases) { ctx.fillStyle = b.team === 'blue' ? 'rgba(61,170,255,0.25)' : 'rgba(255,80,60,0.25)'; circle(b.x, b.z, b.radius); }
+    ctx.fillStyle = 'rgba(120,200,230,0.22)';
+    for (const c of L.cover) {
+      if (c.kind === 'step' || c.widthX * c.widthZ < 6) continue;
+      const [px, py] = toMap(c.x, c.z);
+      ctx.save(); ctx.translate(px, py); ctx.rotate(-(c.rot ?? 0));
+      ctx.fillRect((-c.widthX / 2) * scale, (-c.widthZ / 2) * scale, c.widthX * scale, c.widthZ * scale); ctx.restore();
+    }
+  } else {
   circle(0, 0, 9.7);
   for (const [x, z] of [[27, 0], [-27, 0], [0, 27], [0, -27]]) circle(x, z, 7.3);
   for (const [x, z, w, d] of [[17, 0, 15.5, 5.3], [-17, 0, 15.5, 5.3], [0, 17, 5.3, 15.5], [0, -17, 5.3, 15.5]]) {
     const [px, py] = toMap(x, z);
     ctx.fillRect(px - (w / 2) * scale, py - (d / 2) * scale, w * scale, d * scale);
+  }
   }
   for (const contact of radar.contacts) {
     const [px, py] = toMap(contact.x, contact.z);

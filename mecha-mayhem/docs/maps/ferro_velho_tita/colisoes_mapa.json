@@ -1,0 +1,1627 @@
+{
+  "version": 1,
+  "units": "meters",
+  "upAxis": "Z",
+  "forwardAxis": "-Y",
+  "status": "authoring-proxies-not-integrated-in-game",
+  "colliders": [
+    {
+      "name": "piso",
+      "shape": "box",
+      "center": [
+        0,
+        0,
+        -0.4
+      ],
+      "size": [
+        80,
+        64,
+        0.65
+      ],
+      "rotationZ": 0,
+      "surface": "concrete",
+      "id": "fv_000"
+    },
+    {
+      "name": "conteiner_1",
+      "shape": "box",
+      "center": [
+        -23,
+        -18,
+        1.65
+      ],
+      "size": [
+        8,
+        3.9,
+        3.3
+      ],
+      "rotationZ": 0.08,
+      "surface": "metal",
+      "id": "fv_001"
+    },
+    {
+      "name": "conteiner_2",
+      "shape": "box",
+      "center": [
+        -13,
+        18,
+        1.65
+      ],
+      "size": [
+        8,
+        3.9,
+        3.3
+      ],
+      "rotationZ": -0.12,
+      "surface": "metal",
+      "id": "fv_002"
+    },
+    {
+      "name": "conteiner_3",
+      "shape": "box",
+      "center": [
+        22,
+        18,
+        1.65
+      ],
+      "size": [
+        8,
+        3.9,
+        3.3
+      ],
+      "rotationZ": 0.14,
+      "surface": "metal",
+      "id": "fv_003"
+    },
+    {
+      "name": "conteiner_4",
+      "shape": "box",
+      "center": [
+        16,
+        -18,
+        1.65
+      ],
+      "size": [
+        8,
+        3.9,
+        3.3
+      ],
+      "rotationZ": -0.1,
+      "surface": "metal",
+      "id": "fv_004"
+    },
+    {
+      "name": "conteiner_5",
+      "shape": "box",
+      "center": [
+        -23,
+        19,
+        1.65
+      ],
+      "size": [
+        8,
+        3.9,
+        3.3
+      ],
+      "rotationZ": 0.04,
+      "surface": "metal",
+      "id": "fv_005"
+    },
+    {
+      "name": "conteiner_6",
+      "shape": "box",
+      "center": [
+        27,
+        -19,
+        1.65
+      ],
+      "size": [
+        8,
+        3.9,
+        3.3
+      ],
+      "rotationZ": 0.18,
+      "surface": "metal",
+      "id": "fv_006"
+    },
+    {
+      "name": "deck_torre",
+      "shape": "box",
+      "center": [
+        -30,
+        24,
+        6.2
+      ],
+      "size": [
+        7.4,
+        7.4,
+        0.35
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_007"
+    },
+    {
+      "name": "degrau_torre",
+      "shape": "box",
+      "center": [
+        -30,
+        12.0,
+        0.2
+      ],
+      "size": [
+        2.4,
+        0.62,
+        0.4
+      ],
+      "rotationZ": 0,
+      "surface": "concrete",
+      "id": "fv_008"
+    },
+    {
+      "name": "degrau_torre",
+      "shape": "box",
+      "center": [
+        -30,
+        12.6,
+        0.6000000000000001
+      ],
+      "size": [
+        2.4,
+        0.62,
+        0.4
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_009"
+    },
+    {
+      "name": "degrau_torre",
+      "shape": "box",
+      "center": [
+        -30,
+        13.2,
+        1.0
+      ],
+      "size": [
+        2.4,
+        0.62,
+        0.4
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_010"
+    },
+    {
+      "name": "degrau_torre",
+      "shape": "box",
+      "center": [
+        -30,
+        13.8,
+        1.4000000000000001
+      ],
+      "size": [
+        2.4,
+        0.62,
+        0.4
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_011"
+    },
+    {
+      "name": "degrau_torre",
+      "shape": "box",
+      "center": [
+        -30,
+        14.4,
+        1.8
+      ],
+      "size": [
+        2.4,
+        0.62,
+        0.4
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_012"
+    },
+    {
+      "name": "degrau_torre",
+      "shape": "box",
+      "center": [
+        -30,
+        15.0,
+        2.2
+      ],
+      "size": [
+        2.4,
+        0.62,
+        0.4
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_013"
+    },
+    {
+      "name": "degrau_torre",
+      "shape": "box",
+      "center": [
+        -30,
+        15.6,
+        2.6000000000000005
+      ],
+      "size": [
+        2.4,
+        0.62,
+        0.4
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_014"
+    },
+    {
+      "name": "degrau_torre",
+      "shape": "box",
+      "center": [
+        -30,
+        16.2,
+        3.0000000000000004
+      ],
+      "size": [
+        2.4,
+        0.62,
+        0.4
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_015"
+    },
+    {
+      "name": "degrau_torre",
+      "shape": "box",
+      "center": [
+        -30,
+        16.8,
+        3.4000000000000004
+      ],
+      "size": [
+        2.4,
+        0.62,
+        0.4
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_016"
+    },
+    {
+      "name": "degrau_torre",
+      "shape": "box",
+      "center": [
+        -30,
+        17.4,
+        3.8000000000000003
+      ],
+      "size": [
+        2.4,
+        0.62,
+        0.4
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_017"
+    },
+    {
+      "name": "degrau_torre",
+      "shape": "box",
+      "center": [
+        -30,
+        18.0,
+        4.2
+      ],
+      "size": [
+        2.4,
+        0.62,
+        0.4
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_018"
+    },
+    {
+      "name": "degrau_torre",
+      "shape": "box",
+      "center": [
+        -30,
+        18.6,
+        4.6000000000000005
+      ],
+      "size": [
+        2.4,
+        0.62,
+        0.4
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_019"
+    },
+    {
+      "name": "degrau_torre",
+      "shape": "box",
+      "center": [
+        -30,
+        19.2,
+        5.000000000000001
+      ],
+      "size": [
+        2.4,
+        0.62,
+        0.4
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_020"
+    },
+    {
+      "name": "degrau_torre",
+      "shape": "box",
+      "center": [
+        -30,
+        19.8,
+        5.4
+      ],
+      "size": [
+        2.4,
+        0.62,
+        0.4
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_021"
+    },
+    {
+      "name": "degrau_torre",
+      "shape": "box",
+      "center": [
+        -30,
+        20.4,
+        5.800000000000001
+      ],
+      "size": [
+        2.4,
+        0.62,
+        0.4
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_022"
+    },
+    {
+      "name": "deck_torre",
+      "shape": "box",
+      "center": [
+        30,
+        24,
+        6.2
+      ],
+      "size": [
+        7.4,
+        7.4,
+        0.35
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_023"
+    },
+    {
+      "name": "degrau_torre",
+      "shape": "box",
+      "center": [
+        30,
+        12.0,
+        0.2
+      ],
+      "size": [
+        2.4,
+        0.62,
+        0.4
+      ],
+      "rotationZ": 0,
+      "surface": "concrete",
+      "id": "fv_024"
+    },
+    {
+      "name": "degrau_torre",
+      "shape": "box",
+      "center": [
+        30,
+        12.6,
+        0.6000000000000001
+      ],
+      "size": [
+        2.4,
+        0.62,
+        0.4
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_025"
+    },
+    {
+      "name": "degrau_torre",
+      "shape": "box",
+      "center": [
+        30,
+        13.2,
+        1.0
+      ],
+      "size": [
+        2.4,
+        0.62,
+        0.4
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_026"
+    },
+    {
+      "name": "degrau_torre",
+      "shape": "box",
+      "center": [
+        30,
+        13.8,
+        1.4000000000000001
+      ],
+      "size": [
+        2.4,
+        0.62,
+        0.4
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_027"
+    },
+    {
+      "name": "degrau_torre",
+      "shape": "box",
+      "center": [
+        30,
+        14.4,
+        1.8
+      ],
+      "size": [
+        2.4,
+        0.62,
+        0.4
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_028"
+    },
+    {
+      "name": "degrau_torre",
+      "shape": "box",
+      "center": [
+        30,
+        15.0,
+        2.2
+      ],
+      "size": [
+        2.4,
+        0.62,
+        0.4
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_029"
+    },
+    {
+      "name": "degrau_torre",
+      "shape": "box",
+      "center": [
+        30,
+        15.6,
+        2.6000000000000005
+      ],
+      "size": [
+        2.4,
+        0.62,
+        0.4
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_030"
+    },
+    {
+      "name": "degrau_torre",
+      "shape": "box",
+      "center": [
+        30,
+        16.2,
+        3.0000000000000004
+      ],
+      "size": [
+        2.4,
+        0.62,
+        0.4
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_031"
+    },
+    {
+      "name": "degrau_torre",
+      "shape": "box",
+      "center": [
+        30,
+        16.8,
+        3.4000000000000004
+      ],
+      "size": [
+        2.4,
+        0.62,
+        0.4
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_032"
+    },
+    {
+      "name": "degrau_torre",
+      "shape": "box",
+      "center": [
+        30,
+        17.4,
+        3.8000000000000003
+      ],
+      "size": [
+        2.4,
+        0.62,
+        0.4
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_033"
+    },
+    {
+      "name": "degrau_torre",
+      "shape": "box",
+      "center": [
+        30,
+        18.0,
+        4.2
+      ],
+      "size": [
+        2.4,
+        0.62,
+        0.4
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_034"
+    },
+    {
+      "name": "degrau_torre",
+      "shape": "box",
+      "center": [
+        30,
+        18.6,
+        4.6000000000000005
+      ],
+      "size": [
+        2.4,
+        0.62,
+        0.4
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_035"
+    },
+    {
+      "name": "degrau_torre",
+      "shape": "box",
+      "center": [
+        30,
+        19.2,
+        5.000000000000001
+      ],
+      "size": [
+        2.4,
+        0.62,
+        0.4
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_036"
+    },
+    {
+      "name": "degrau_torre",
+      "shape": "box",
+      "center": [
+        30,
+        19.8,
+        5.4
+      ],
+      "size": [
+        2.4,
+        0.62,
+        0.4
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_037"
+    },
+    {
+      "name": "degrau_torre",
+      "shape": "box",
+      "center": [
+        30,
+        20.4,
+        5.800000000000001
+      ],
+      "size": [
+        2.4,
+        0.62,
+        0.4
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_038"
+    },
+    {
+      "name": "bobina",
+      "shape": "cylinder",
+      "center": [
+        -13,
+        -7,
+        1.1
+      ],
+      "size": [
+        3.8,
+        3.8,
+        2.2
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_039"
+    },
+    {
+      "name": "bobina",
+      "shape": "cylinder",
+      "center": [
+        12,
+        6,
+        1.1
+      ],
+      "size": [
+        3.8,
+        3.8,
+        2.2
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_040"
+    },
+    {
+      "name": "bobina",
+      "shape": "cylinder",
+      "center": [
+        -10,
+        8,
+        1.1
+      ],
+      "size": [
+        3.8,
+        3.8,
+        2.2
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_041"
+    },
+    {
+      "name": "bobina",
+      "shape": "cylinder",
+      "center": [
+        13,
+        -7,
+        1.1
+      ],
+      "size": [
+        3.8,
+        3.8,
+        2.2
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_042"
+    },
+    {
+      "name": "base_nucleo",
+      "shape": "cylinder",
+      "center": [
+        0,
+        0,
+        0.175
+      ],
+      "size": [
+        15,
+        15,
+        0.35
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_043"
+    },
+    {
+      "name": "reator_nucleo",
+      "shape": "cylinder",
+      "center": [
+        0,
+        0,
+        0.8
+      ],
+      "size": [
+        5.6,
+        5.6,
+        1
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_044"
+    },
+    {
+      "name": "HERO | Broken Titan salvage",
+      "shape": "box",
+      "center": [
+        -8.226848602294922,
+        -23.987144470214844,
+        2.7488489151000977
+      ],
+      "size": [
+        10.09292984008789,
+        4.859064102172852,
+        6.143403053283691
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_045"
+    },
+    {
+      "name": "PROP | Mixed mechanical salvage",
+      "shape": "box",
+      "center": [
+        -34.33601379394531,
+        -19.697086334228516,
+        0.7716027498245239
+      ],
+      "size": [
+        5.272062301635742,
+        4.537687301635742,
+        1.8268413543701172
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_046"
+    },
+    {
+      "name": "PROP | Mixed mechanical salvage.001",
+      "shape": "box",
+      "center": [
+        34.111446380615234,
+        -25.861291885375977,
+        0.8026990294456482
+      ],
+      "size": [
+        5.24894905090332,
+        4.727474212646484,
+        1.7484067678451538
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_047"
+    },
+    {
+      "name": "PROP | Mixed mechanical salvage.002",
+      "shape": "box",
+      "center": [
+        -34.114742279052734,
+        11.107609748840332,
+        0.8569667935371399
+      ],
+      "size": [
+        4.732200622558594,
+        3.9783573150634766,
+        1.529211401939392
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_048"
+    },
+    {
+      "name": "PROP | Mixed mechanical salvage.003",
+      "shape": "box",
+      "center": [
+        8.330126762390137,
+        26.839359283447266,
+        0.7863683700561523
+      ],
+      "size": [
+        4.202878475189209,
+        4.554903030395508,
+        1.7392723560333252
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_049"
+    },
+    {
+      "name": "PROP | Mixed mechanical salvage.004",
+      "shape": "box",
+      "center": [
+        -17.909156799316406,
+        27.814170837402344,
+        0.8139019012451172
+      ],
+      "size": [
+        5.332803726196289,
+        3.9437808990478516,
+        1.7853102684020996
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_050"
+    },
+    {
+      "name": "PROP | Reclaimed pressure tanks",
+      "shape": "box",
+      "center": [
+        23.825000762939453,
+        10.007499694824219,
+        2.569999933242798
+      ],
+      "size": [
+        5.350000381469727,
+        3.185000419616699,
+        5.349999904632568
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_051"
+    },
+    {
+      "name": "Barreira perimetral",
+      "shape": "box",
+      "center": [
+        -37.0,
+        -31.0,
+        1.0
+      ],
+      "size": [
+        6.900000095367432,
+        0.800000011920929,
+        1.7999999523162842
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_052"
+    },
+    {
+      "name": "Barreira perimetral.001",
+      "shape": "box",
+      "center": [
+        -29.600000381469727,
+        -31.0,
+        1.0
+      ],
+      "size": [
+        6.900000095367432,
+        0.800000011920929,
+        1.7999999523162842
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_053"
+    },
+    {
+      "name": "Barreira perimetral.002",
+      "shape": "box",
+      "center": [
+        -22.200000762939453,
+        -31.0,
+        1.0
+      ],
+      "size": [
+        6.900000095367432,
+        0.800000011920929,
+        1.7999999523162842
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_054"
+    },
+    {
+      "name": "Barreira perimetral.003",
+      "shape": "box",
+      "center": [
+        -14.800000190734863,
+        -31.0,
+        1.0
+      ],
+      "size": [
+        6.900000095367432,
+        0.800000011920929,
+        1.7999999523162842
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_055"
+    },
+    {
+      "name": "Barreira perimetral.004",
+      "shape": "box",
+      "center": [
+        -7.400000095367432,
+        -31.0,
+        1.0
+      ],
+      "size": [
+        6.900000095367432,
+        0.800000011920929,
+        1.7999999523162842
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_056"
+    },
+    {
+      "name": "Barreira perimetral.005",
+      "shape": "box",
+      "center": [
+        0.0,
+        -31.0,
+        1.0
+      ],
+      "size": [
+        6.900000095367432,
+        0.800000011920929,
+        1.7999999523162842
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_057"
+    },
+    {
+      "name": "Barreira perimetral.006",
+      "shape": "box",
+      "center": [
+        7.400000095367432,
+        -31.0,
+        1.0
+      ],
+      "size": [
+        6.900000095367432,
+        0.800000011920929,
+        1.7999999523162842
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_058"
+    },
+    {
+      "name": "Barreira perimetral.007",
+      "shape": "box",
+      "center": [
+        14.800000190734863,
+        -31.0,
+        1.0
+      ],
+      "size": [
+        6.900000095367432,
+        0.800000011920929,
+        1.7999999523162842
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_059"
+    },
+    {
+      "name": "Barreira perimetral.008",
+      "shape": "box",
+      "center": [
+        22.200000762939453,
+        -31.0,
+        1.0
+      ],
+      "size": [
+        6.900000095367432,
+        0.800000011920929,
+        1.7999999523162842
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_060"
+    },
+    {
+      "name": "Barreira perimetral.009",
+      "shape": "box",
+      "center": [
+        29.600000381469727,
+        -31.0,
+        1.0
+      ],
+      "size": [
+        6.900000095367432,
+        0.800000011920929,
+        1.7999999523162842
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_061"
+    },
+    {
+      "name": "Barreira perimetral.010",
+      "shape": "box",
+      "center": [
+        37.0,
+        -31.0,
+        1.0
+      ],
+      "size": [
+        6.900000095367432,
+        0.800000011920929,
+        1.7999999523162842
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_062"
+    },
+    {
+      "name": "Barreira perimetral.011",
+      "shape": "box",
+      "center": [
+        -37.0,
+        31.0,
+        1.0
+      ],
+      "size": [
+        6.900000095367432,
+        0.800000011920929,
+        1.7999999523162842
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_063"
+    },
+    {
+      "name": "Barreira perimetral.012",
+      "shape": "box",
+      "center": [
+        -29.600000381469727,
+        31.0,
+        1.0
+      ],
+      "size": [
+        6.900000095367432,
+        0.800000011920929,
+        1.7999999523162842
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_064"
+    },
+    {
+      "name": "Barreira perimetral.013",
+      "shape": "box",
+      "center": [
+        -22.200000762939453,
+        31.0,
+        1.0
+      ],
+      "size": [
+        6.900000095367432,
+        0.800000011920929,
+        1.7999999523162842
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_065"
+    },
+    {
+      "name": "Barreira perimetral.014",
+      "shape": "box",
+      "center": [
+        -14.800000190734863,
+        31.0,
+        1.0
+      ],
+      "size": [
+        6.900000095367432,
+        0.800000011920929,
+        1.7999999523162842
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_066"
+    },
+    {
+      "name": "Barreira perimetral.015",
+      "shape": "box",
+      "center": [
+        -7.400000095367432,
+        31.0,
+        1.0
+      ],
+      "size": [
+        6.900000095367432,
+        0.800000011920929,
+        1.7999999523162842
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_067"
+    },
+    {
+      "name": "Barreira perimetral.016",
+      "shape": "box",
+      "center": [
+        0.0,
+        31.0,
+        1.0
+      ],
+      "size": [
+        6.900000095367432,
+        0.800000011920929,
+        1.7999999523162842
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_068"
+    },
+    {
+      "name": "Barreira perimetral.017",
+      "shape": "box",
+      "center": [
+        7.400000095367432,
+        31.0,
+        1.0
+      ],
+      "size": [
+        6.900000095367432,
+        0.800000011920929,
+        1.7999999523162842
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_069"
+    },
+    {
+      "name": "Barreira perimetral.018",
+      "shape": "box",
+      "center": [
+        14.800000190734863,
+        31.0,
+        1.0
+      ],
+      "size": [
+        6.900000095367432,
+        0.800000011920929,
+        1.7999999523162842
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_070"
+    },
+    {
+      "name": "Barreira perimetral.019",
+      "shape": "box",
+      "center": [
+        22.200000762939453,
+        31.0,
+        1.0
+      ],
+      "size": [
+        6.900000095367432,
+        0.800000011920929,
+        1.7999999523162842
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_071"
+    },
+    {
+      "name": "Barreira perimetral.020",
+      "shape": "box",
+      "center": [
+        29.600000381469727,
+        31.0,
+        1.0
+      ],
+      "size": [
+        6.900000095367432,
+        0.800000011920929,
+        1.7999999523162842
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_072"
+    },
+    {
+      "name": "Barreira perimetral.021",
+      "shape": "box",
+      "center": [
+        37.0,
+        31.0,
+        1.0
+      ],
+      "size": [
+        6.900000095367432,
+        0.800000011920929,
+        1.7999999523162842
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_073"
+    },
+    {
+      "name": "Base giro guindaste",
+      "shape": "box",
+      "center": [
+        2.0,
+        28.0,
+        0.800000011920929
+      ],
+      "size": [
+        6.0,
+        6.0,
+        1.600000023841858
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_074"
+    },
+    {
+      "name": "Estacao reparo",
+      "shape": "box",
+      "center": [
+        -35.0,
+        -8.0,
+        1.899999976158142
+      ],
+      "size": [
+        2.0,
+        2.0,
+        3.799999952316284
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_075"
+    },
+    {
+      "name": "Estacao reparo.001",
+      "shape": "box",
+      "center": [
+        35.0,
+        -8.0,
+        1.899999976158142
+      ],
+      "size": [
+        2.0,
+        2.0,
+        3.799999952316284
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_076"
+    },
+    {
+      "name": "Pilar protecao base",
+      "shape": "box",
+      "center": [
+        -31.0,
+        -5.800000190734863,
+        1.350000023841858
+      ],
+      "size": [
+        1.2000000476837158,
+        1.2000000476837158,
+        2.700000047683716
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_077"
+    },
+    {
+      "name": "Pilar protecao base.001",
+      "shape": "box",
+      "center": [
+        -31.0,
+        5.800000190734863,
+        1.350000023841858
+      ],
+      "size": [
+        1.2000000476837158,
+        1.2000000476837158,
+        2.700000047683716
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_078"
+    },
+    {
+      "name": "Pilar protecao base.002",
+      "shape": "box",
+      "center": [
+        31.0,
+        -5.800000190734863,
+        1.350000023841858
+      ],
+      "size": [
+        1.2000000476837158,
+        1.2000000476837158,
+        2.700000047683716
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_079"
+    },
+    {
+      "name": "Pilar protecao base.003",
+      "shape": "box",
+      "center": [
+        31.0,
+        5.800000190734863,
+        1.350000023841858
+      ],
+      "size": [
+        1.2000000476837158,
+        1.2000000476837158,
+        2.700000047683716
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_080"
+    },
+    {
+      "name": "Sapato fundacao",
+      "shape": "box",
+      "center": [
+        -32.29999923706055,
+        21.700000762939453,
+        0.25
+      ],
+      "size": [
+        1.100000023841858,
+        1.100000023841858,
+        0.5
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_081"
+    },
+    {
+      "name": "Sapato fundacao.001",
+      "shape": "box",
+      "center": [
+        -32.29999923706055,
+        26.299999237060547,
+        0.25
+      ],
+      "size": [
+        1.100000023841858,
+        1.100000023841858,
+        0.5
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_082"
+    },
+    {
+      "name": "Sapato fundacao.002",
+      "shape": "box",
+      "center": [
+        -27.700000762939453,
+        21.700000762939453,
+        0.25
+      ],
+      "size": [
+        1.100000023841858,
+        1.100000023841858,
+        0.5
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_083"
+    },
+    {
+      "name": "Sapato fundacao.003",
+      "shape": "box",
+      "center": [
+        -27.700000762939453,
+        26.299999237060547,
+        0.25
+      ],
+      "size": [
+        1.100000023841858,
+        1.100000023841858,
+        0.5
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_084"
+    },
+    {
+      "name": "Sapato fundacao.004",
+      "shape": "box",
+      "center": [
+        27.700000762939453,
+        21.700000762939453,
+        0.25
+      ],
+      "size": [
+        1.100000023841858,
+        1.100000023841858,
+        0.5
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_085"
+    },
+    {
+      "name": "Sapato fundacao.005",
+      "shape": "box",
+      "center": [
+        27.700000762939453,
+        26.299999237060547,
+        0.25
+      ],
+      "size": [
+        1.100000023841858,
+        1.100000023841858,
+        0.5
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_086"
+    },
+    {
+      "name": "Sapato fundacao.006",
+      "shape": "box",
+      "center": [
+        32.29999923706055,
+        21.700000762939453,
+        0.25
+      ],
+      "size": [
+        1.100000023841858,
+        1.100000023841858,
+        0.5
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_087"
+    },
+    {
+      "name": "Sapato fundacao.007",
+      "shape": "box",
+      "center": [
+        32.29999923706055,
+        26.299999237060547,
+        0.25
+      ],
+      "size": [
+        1.100000023841858,
+        1.100000023841858,
+        0.5
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_088"
+    },
+    {
+      "name": "limite_lateral",
+      "shape": "box",
+      "center": [
+        -40,
+        0,
+        2
+      ],
+      "size": [
+        1,
+        64,
+        4
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_089"
+    },
+    {
+      "name": "limite_lateral",
+      "shape": "box",
+      "center": [
+        40,
+        0,
+        2
+      ],
+      "size": [
+        1,
+        64,
+        4
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_090"
+    },
+    {
+      "name": "limite_fundo",
+      "shape": "box",
+      "center": [
+        0,
+        -32,
+        2
+      ],
+      "size": [
+        80,
+        1,
+        4
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_091"
+    },
+    {
+      "name": "limite_fundo",
+      "shape": "box",
+      "center": [
+        0,
+        32,
+        2
+      ],
+      "size": [
+        80,
+        1,
+        4
+      ],
+      "rotationZ": 0,
+      "surface": "metal",
+      "id": "fv_092"
+    }
+  ],
+  "spawnPoints": [
+    {
+      "team": "blue",
+      "position": [
+        -31,
+        0,
+        1
+      ]
+    },
+    {
+      "team": "red",
+      "position": [
+        31,
+        0,
+        1
+      ]
+    }
+  ],
+  "controlPoint": [
+    0,
+    0,
+    1.3
+  ],
+  "surfaces": {
+    "concrete": {
+      "friction": 0.85,
+      "restitution": 0.03
+    },
+    "metal": {
+      "friction": 0.65,
+      "restitution": 0.05
+    }
+  },
+  "notes": [
+    "Primitive conservative collision proxies; requires authoritative game integration and gameplay validation.",
+    "Robot and scrap bounds are deliberately conservative; detail meshes are not physics meshes."
+  ]
+}

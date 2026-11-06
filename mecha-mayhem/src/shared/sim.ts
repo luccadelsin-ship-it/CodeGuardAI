@@ -179,9 +179,11 @@ export function stepMech(s: MechState, input: MechInput, dt: number, arena: Aren
   s.pushZ *= pushDecay;
   const moveX = (s.vx + s.pushX) * dt;
   const moveZ = (s.vz + s.pushZ) * dt;
-  if (arena.canMoveTo(s.x + moveX, s.z, MOVE.radius, s.y)) s.x += moveX;
+  // Grounded mechs walk up low ledges and stair treads (maps with a step height only).
+  const stepUp = s.grounded ? (arena.stepHeight ?? 0) : 0;
+  if (arena.canMoveTo(s.x + moveX, s.z, MOVE.radius, s.y + stepUp)) s.x += moveX;
   else { s.vx = 0; s.pushX = 0; }
-  if (arena.canMoveTo(s.x, s.z + moveZ, MOVE.radius, s.y)) s.z += moveZ;
+  if (arena.canMoveTo(s.x, s.z + moveZ, MOVE.radius, s.y + stepUp)) s.z += moveZ;
   else { s.vz = 0; s.pushZ = 0; }
 
   // Vertical: jump, jet hover and gravity.
@@ -201,7 +203,7 @@ export function stepMech(s: MechState, input: MechInput, dt: number, arena: Aren
   }
   s.vy -= MOVE.gravity * dt;
   s.y += s.vy * dt;
-  const floor = arena.floorAt(s.x, s.z, MOVE.radius, Math.max(s.y, s.y - s.vy * dt));
+  const floor = arena.floorAt(s.x, s.z, MOVE.radius, Math.max(s.y, s.y - s.vy * dt) + (s.vy <= 0 ? stepUp : 0));
   if (s.y <= floor) {
     if (!s.grounded && s.vy < -2) events.landed = -s.vy;
     s.y = floor;

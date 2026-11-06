@@ -63,7 +63,9 @@ export function createWorldGraphics(scene: Scene, layout: ArenaLayout, mapId: Ma
   const support = new StandardMaterial('deck-structure', scene); support.diffuseColor = Color3.FromHexString('#1d2b37'); support.specularColor.setAll(.5); support.specularPower = 64; materials.push(support);
   const add = (mesh: AbstractMesh, mat: StandardMaterial, extra = false) => { mesh.material = mat; mesh.isPickable = false; mesh.receiveShadows = true; meshes.push(mesh); if (extra) optional.push(mesh); };
   const y = layout.deckTopY;
-  const platforms = [layout.centralArena, ...layout.stations];
+  // Authored GLB maps (Ferro-Velho Titã) carry their own deck markings: no generated inlays there.
+  const authored = layout.visualAsset.startsWith('glb:');
+  const platforms = authored ? [] : [layout.centralArena, ...layout.stations];
   // Thin cosmetic inlays sit on the existing walkable deck; all movement still uses Arena.
   for (const [i, p] of platforms.entries()) {
     const inset = MeshBuilder.CreateCylinder(`graphics-deck-inlay-${i}`, { diameter: p.radius * 1.82, height: .018, tessellation: 64 }, scene);
@@ -80,7 +82,7 @@ export function createWorldGraphics(scene: Scene, layout: ArenaLayout, mapId: Ma
   }
   // One source geometry supplies instanced bridge lane dashes.
   const dash = MeshBuilder.CreateBox('graphics-lane-template', { width: .1, height: .012, depth: .85 }, scene); dash.material = paint; dash.setEnabled(false); meshes.push(dash);
-  for (const [i, bridge] of layout.bridges.entries()) {
+  for (const [i, bridge] of (authored ? [] : layout.bridges).entries()) {
     const alongX = bridge.widthX > bridge.widthZ;
     const length = alongX ? bridge.widthX : bridge.widthZ;
     for (let k = -Math.floor(length / 2.6); k <= Math.floor(length / 2.6); k++) for (const side of [-1, 1]) {
@@ -92,7 +94,7 @@ export function createWorldGraphics(scene: Scene, layout: ArenaLayout, mapId: Ma
   const coreLabel = new DynamicTexture('core-deck-label', { width: 512, height: 256 }, scene, false);
   const text = coreLabel.getContext() as CanvasRenderingContext2D; text.clearRect(0, 0, 512, 256); text.textAlign = 'center'; text.fillStyle = '#d6e4dd'; text.font = 'bold 96px Arial'; text.fillText('CORE', 256, 116); text.fillStyle = '#f39b50'; text.font = 'bold 32px Arial'; text.fillText('//  SECTOR 01  //', 256, 172); coreLabel.update(); coreLabel.hasAlpha = true; textures.push(coreLabel);
   const labelMat = new StandardMaterial('core-deck-label-material', scene); labelMat.diffuseTexture = coreLabel; labelMat.opacityTexture = coreLabel; labelMat.emissiveColor.set(.15, .18, .2); labelMat.specularColor.setAll(0); labelMat.backFaceCulling = false; materials.push(labelMat);
-  const label = MeshBuilder.CreateGround('graphics-core-label', { width: 3.6, height: 1.8 }, scene); label.position.set(layout.centralArena.x, y + .04, layout.centralArena.z + 3.6); add(label, labelMat);
+  if (!authored) { const label = MeshBuilder.CreateGround('graphics-core-label', { width: 3.6, height: 1.8 }, scene); label.position.set(layout.centralArena.x, y + .04, layout.centralArena.z + 3.6); add(label, labelMat); }
   scene.metadata = { ...(scene.metadata ?? {}), graphics: { environment: 'local-cube-64', deckDetails: meshes.length } };
 
   return {

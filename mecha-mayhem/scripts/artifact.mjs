@@ -35,7 +35,7 @@ for (const file of walk(out).filter((p) => p.endsWith('.glb'))) {
 const html = readFileSync(join(out, 'index.html'), 'utf8');
 let head = html.match(/<head>([\s\S]*?)<\/head>/)[1];
 const body = html.match(/<body[^>]*>([\s\S]*)<\/body>/)[1];
-head = head.replace(/\s*<meta charset[^>]*>/, '').replace(/\s*<meta name="viewport"[^>]*>/, '')
+head = head.replace(/\s*<meta name="viewport"[^>]*>/, '')
   .replace(/\s*<link rel="icon"[^>]*>/, '').replace(/<title>[\s\S]*?<\/title>/, '<title>Mecha Mayhem</title>');
 const style = '<style>html,body{height:100%;background:#07101b;color:#e9f2ff;overflow:hidden}</style>';
 writeFileSync(join(out, 'mecha-mayhem.html'), `${head.trim()}\n    ${style}\n${body.trim()}\n`);
