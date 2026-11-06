@@ -7,11 +7,12 @@ import { DIFFICULTIES, type Difficulty } from './game/drones';
 import type { MechPalette } from './game/mech';
 import { TouchControls, isTouchDevice } from './game/touch';
 import { THEMES, createWorld, type ThemeId } from './game/world';
-import { OnlineSession, defaultServerUrl, type ScoreRow } from './net/online';
+import { OnlineSession, defaultServerUrl, type ScoreRow, type SocketLike } from './net/online';
+import { ArtifactHost, joinHostedRoom, listHostedRooms, roomApi } from './net/artifactRoom';
 import { MODE_RULES, type OnlineMode } from './shared/protocol';
 import { WEAPONS, WEAPON_ORDER, isWeaponId, type WeaponId } from './shared/weapons';
 import { PART_STYLES, normalizeParts, type MechPartConfig } from './shared/customization';
-import { MAPS, MAP_ORDER, mapFromSearch, type MapId } from './shared/maps';
+import { MAPS, MAP_ORDER, isMapId, mapFromSearch, type MapId } from './shared/maps';
 import { FAMILIES, FAMILY_ORDER, computeLoadout, type FamilyId } from './shared/parts';
 import { PASS_TIER_XP, SEASON_PASS, SHOP, awardMatch, buyItem, claimTier, equip, equippedItem, levelInfo, loadProfile, passTier, saveProfile } from './game/progression';
 import { MapEditor, findCustomMap } from './game/editor';
@@ -36,6 +37,7 @@ let currentScreen: UiScreen = 'menu';
 let game: CombatGame;
 let touch: TouchControls;
 let online: OnlineSession | null = null;
+let artifactHost: ArtifactHost | null = null;
 let toastTimer = 0;
 let hitTimer = 0;
 let bannerTimer = 0;
@@ -619,6 +621,31 @@ function applyTheme(index: number): void {
   saveSetting('theme', theme.id);
 }
 
+/** Artifact build: list rooms other players host right now (lobby presence) with a join button each. */
+async function renderArtifactRooms(): Promise<void> {
+  const box = el('artifact-rooms');
+  box.classList.remove('hidden');
+  el('online-server-note').textContent = 'NESTE ARTEFATO, QUEM CRIA A SALA HOSPEDA A PARTIDA NO PRÓPRIO NAVEGADOR (SERVIDOR AUTORITATIVO COM BOTS). MANTENHA A ABA DO ANFITRIÃO ABERTA. PARA JOGAR, CADA PESSOA PRECISA DE ACESSO DE COLABORADOR OU EDITOR AO ARTEFATO.';
+  const api = await roomApi();
+  const list = el('artifact-room-list');
+  if (!api) { list.textContent = 'ONLINE INDISPONÍVEL AQUI: ABRA O ARTEFATO PELO CLAUDE.AI COM SUA CONTA.'; return; }
+  const draw = () => {
+    if (currentScreen !== 'online') return;
+    const rooms = listHostedRooms(api);
+    list.replaceChildren();
+    if (!rooms.length) { list.textContent = 'NENHUMA SALA ABERTA AGORA. CRIE UMA OU USE PARTIDA RÁPIDA.'; return; }
+    for (const r of rooms) {
+      const button = document.createElement('button');
+      button.className = 'chip artifact-room';
+      button.textContent = `${r.code} · ${MODE_RULES[r.mode]?.label ?? r.mode} · ${MAPS[r.map]?.label ?? r.map} · ${r.humans}/${r.max}${r.open ? '' : ' · PRIVADA'}`;
+      button.addEventListener('click', () => void joinOnline(r.mode, r.code));
+      list.append(button);
+    }
+  };
+  draw();
+  window.setTimeout(draw, 1500);
+}
+
 async function joinOnline(mode: OnlineMode, room?: string, create?: boolean): Promise<void> {
   const status = el('online-status');
   if (customMap || storyChapter) { status.textContent = 'MAPAS CRIADOS E O MODO HISTÓRIA FUNCIONAM NO TREINO. VOLTE A UM MAPA PADRÃO PARA JOGAR ONLINE.'; status.classList.add('error'); return; }
@@ -631,15 +658,34 @@ async function joinOnline(mode: OnlineMode, room?: string, create?: boolean): Pr
   document.querySelectorAll<HTMLButtonElement>('#online button').forEach((b) => { b.disabled = true; });
   try {
     online?.leave();
+    artifactHost?.stop(); artifactHost = null;
     game.sfx.unlock();
+    // Artifact build: no game server; a player's browser hosts the authoritative room (see net/artifactRoom).
+    let socket: (() => SocketLike) | undefined;
+    if (isArtifactBuild) {
+      const api = await roomApi();
+      if (!api) throw new Error('O ONLINE DO ARTEFATO PRECISA DO CLAUDE.AI: ABRA O LINK COM SUA CONTA (ACESSO DE COLABORADOR OU EDITOR).');
+      const target = room ?? (!create ? listHostedRooms(api).find((r) => r.open && r.mode === mode && r.map === selectedMap && r.humans < r.max)?.code : undefined);
+      if (target) {
+        status.textContent = `ENTRANDO NA SALA ${target}…`;
+        const remote = await joinHostedRoom(target);
+        socket = () => remote;
+      } else {
+        status.textContent = 'CRIANDO SALA NO SEU NAVEGADOR…';
+        const host = await ArtifactHost.create(mode, selectedMap, Boolean(create), game.world.arena.layout);
+        artifactHost = host;
+        socket = () => host.socket();
+      }
+    }
     const session = await OnlineSession.connect(game, game.camera.getScene(), {
       url, name, palette: loadSetting('palette', 'arctic') as MechPalette, weapon: game.currentWeapon, parts: partConfig, mode, room, create,
+      socket, interpDelay: isArtifactBuild ? 0.2 : undefined, map: selectedMap,
     }, {
       onFeed: feed,
       onBanner: banner,
       onScoreboard: renderScoreboard,
       onStatus: toast,
-      onClosed: (reason) => { if (game.session === 'online') { game.leaveSession(); game.setMode('menu'); show('menu'); toast(reason); } online = null; },
+      onClosed: (reason) => { artifactHost?.stop(); artifactHost = null; if (game.session === 'online') { game.leaveSession(); game.setMode('menu'); show('menu'); toast(isArtifactBuild ? 'A SALA FOI ENCERRADA PELO ANFITRIÃO.' : reason); } online = null; },
     });
     online = session;
     status.textContent = '';
@@ -648,9 +694,19 @@ async function joinOnline(mode: OnlineMode, room?: string, create?: boolean): Pr
     game.startOnline(session, new Vector3(spawn.x, spawn.y, spawn.z), spawn.yaw);
     if (session.team) game.setPalette(session.team === 'blue' ? 'arctic' : 'ember');
     show('game');
-    banner(session.isPrivate ? `SALA ${session.room}` : 'CONECTADO', session.isPrivate ? 'COMPARTILHE O CÓDIGO COM SEU OPONENTE' : `PARTIDA PÚBLICA · ${MODE_RULES[mode].label}`);
+    banner(session.isPrivate ? `SALA ${session.room}` : 'CONECTADO', artifactHost ? 'VOCÊ É O ANFITRIÃO · MANTENHA ESTA ABA ABERTA' : session.isPrivate ? 'COMPARTILHE O CÓDIGO COM SEU OPONENTE' : `PARTIDA PÚBLICA · ${MODE_RULES[mode].label}`);
   } catch (error) {
-    status.textContent = error instanceof Error ? error.message : 'Falha ao conectar.';
+    artifactHost?.stop(); artifactHost = null;
+    const message = error instanceof Error ? error.message : 'Falha ao conectar.';
+    // The host plays another map: reload into that map and join the room automatically.
+    const otherMap = /^MAPA:(\w+)$/.exec(message)?.[1];
+    if (otherMap && isMapId(otherMap) && room) {
+      status.textContent = `A SALA ESTÁ NO MAPA ${MAPS[otherMap].label}. TROCANDO DE MAPA…`;
+      const next = nextLaunch(); next.set('map', otherMap); next.set('online', room); next.delete('lobby'); next.delete('story'); next.delete('custom');
+      window.setTimeout(() => relaunch(next), 600);
+      return;
+    }
+    status.textContent = otherMap ? 'ESTA SALA USA OUTRO MAPA.' : message;
     status.classList.add('error');
   } finally {
     document.querySelectorAll<HTMLButtonElement>('#online button').forEach((b) => { b.disabled = false; });
@@ -677,7 +733,7 @@ function bindUI(): void {
   el('garage-button').addEventListener('click', () => { garageReturn = 'menu'; game.setMode('garage'); show('garage'); });
   el('online-button').addEventListener('click', () => {
     game.setMode('settings'); show('online');
-    if (isArtifactBuild) el('online-status').textContent = 'O ONLINE PRECISA DO SERVIDOR DO JOGO. NESTA VERSÃO NO NAVEGADOR, JOGUE TREINO, HISTÓRIA E EDITOR; PARA ONLINE, RODE O ZIP COM npm run dev.';
+    if (isArtifactBuild) void renderArtifactRooms();
   });
   el('settings-button').addEventListener('click', () => { game.setMode('settings'); show('settings'); });
   el('tip-skip').addEventListener('click', finishTips);
@@ -909,6 +965,7 @@ async function bootstrap(): Promise<void> {
   window.setTimeout(() => {
     loading.classList.add('hidden');
     if ((customMap || storyChapter) && launchParams.get('play') === '1') { forget('play'); el('start-button').click(); }
+    else if (launchParams.get('online')) { const code = launchParams.get('online')!; forget('online'); game.setMode('settings'); show('online'); el<HTMLInputElement>('room-code').value = code; void joinOnline('ffa', code); }
     else if (launchParams.get('lobby') === '1') openLobby(); else show('menu');
   }, 450);
 }

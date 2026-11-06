@@ -94,8 +94,9 @@ type SnapBase = Omit<Extract<ServerMessage, { t: 'snap' }>, 'ack' | 'me'>;
 export class ArtifactHost {
   readonly room: Room;
   private remotes = new Map<string, RemotePeer>();
-  private timer = 0;
-  private ticks = 0;
+  private ticker: (() => void) | null = null;
+  private lastTick = performance.now();
+  private flushClock = 0;
   private seq = 0;
   private stopped = false;
   private unsubscribe: Array<() => void> = [];
@@ -115,7 +116,7 @@ export class ArtifactHost {
     await named.presence({ role: 'host', code, mode, map });
     host.unsubscribe.push(named.on('c', (msg) => host.onClient(msg)));
     host.unsubscribe.push(named.onPeers((change) => { for (const p of change.left) host.dropPeer(p.peer); }));
-    host.timer = window.setInterval(() => host.tick(), 1000 / 30);
+    host.ticker = startTicker(() => host.tick());
     host.advertise();
     return host;
   }
@@ -131,11 +132,21 @@ export class ArtifactHost {
     void this.api.presence({ mm }).catch(() => { /* lobby listing is best effort */ });
   }
 
+  /** Fixed 30 Hz simulation driven by wall-clock time, so a late or throttled timer catches up. */
   private tick(): void {
     if (this.stopped) return;
-    this.room.tick(1 / 30);
-    if (++this.ticks % 2 === 0) this.flush();
-    if ((this.advertiseTimer += 1 / 30) > 2) { this.advertiseTimer = 0; this.advertise(); }
+    const t = performance.now();
+    let steps = Math.min(15, Math.floor((t - this.lastTick) / (1000 / 30)));
+    if (steps <= 0) return;
+    this.lastTick += steps * (1000 / 30);
+    if (t - this.lastTick > 500) this.lastTick = t; // after a long stall, skip ahead instead of fast-forwarding
+    while (steps-- > 0) {
+      this.room.tick(1 / 30);
+      this.flushClock += 1 / 30;
+      this.advertiseTimer += 1 / 30;
+    }
+    if (this.flushClock >= FLUSH_SECONDS - 1e-6) { this.flushClock = 0; this.flush(); }
+    if (this.advertiseTimer > 2) { this.advertiseTimer = 0; this.advertise(); }
   }
 
   private onClient(msg: Message): void {
@@ -227,7 +238,7 @@ export class ArtifactHost {
   stop(): void {
     if (this.stopped) return;
     this.stopped = true;
-    window.clearInterval(this.timer);
+    this.ticker?.();
     for (const off of this.unsubscribe) off();
     void this.named.emit('s', { q: ++this.seq, end: true }).catch(() => {});
     void this.named.leave().catch(() => {});
@@ -258,7 +269,7 @@ class LocalSocket extends Events implements SocketLike {
     if (this.readyState === 3) return;
     this.readyState = 3;
     this.host.stop();
-    this.dispatch('close');
+    window.setTimeout(() => this.dispatch('close'), 0); // like a WebSocket: close arrives after the call
   }
 }
 
@@ -325,7 +336,7 @@ class RemoteSocket extends Events implements SocketLike {
     window.clearInterval(this.timer);
     for (const off of this.off) off();
     void this.named.leave().catch(() => {});
-    this.dispatch('close');
+    window.setTimeout(() => this.dispatch('close'), 0); // like a WebSocket: close arrives after the call
   }
 
   close(): void { this.end(); }
@@ -348,4 +359,21 @@ export async function joinHostedRoom(code: string): Promise<SocketLike> {
 function cleanName(raw: unknown): string {
   const text = typeof raw === 'string' ? raw : '';
   return text.normalize('NFKC').replace(/[^\p{L}\p{N} _\-.]/gu, '').trim().toUpperCase().slice(0, 16) || 'PILOTO';
+}
+
+/**
+ * 30 Hz callback that keeps running while the tab is in the background: browsers throttle timers in
+ * hidden tabs to about once a second, but not a worker's timer posting messages to the page.
+ */
+function startTicker(fn: () => void): () => void {
+  try {
+    const source = 'setInterval(() => postMessage(0), 1000 / 30);';
+    const url = URL.createObjectURL(new Blob([source], { type: 'text/javascript' }));
+    const worker = new Worker(url);
+    worker.onmessage = () => fn();
+    return () => { worker.terminate(); URL.revokeObjectURL(url); };
+  } catch {
+    const id = window.setInterval(fn, 1000 / 30);
+    return () => window.clearInterval(id);
+  }
 }

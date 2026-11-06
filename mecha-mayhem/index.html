@@ -135,7 +135,8 @@
             <button id="create-room" class="secondary-action"><span class="action-number">+</span><span>CRIAR SALA PRIVADA</span><span>↗</span></button>
             <div class="join-row"><input id="room-code" maxlength="5" placeholder="CÓDIGO" autocomplete="off" /><button id="join-room" class="chip">ENTRAR</button></div>
           </div>
-          <details class="advanced"><summary>SERVIDOR</summary><label class="field"><span>ENDEREÇO WEBSOCKET</span><input id="server-url" spellcheck="false" /></label><small>O servidor sobe junto com <code>npm run dev</code>, <code>npm run preview</code> e <code>npm start</code>.</small></details>
+          <div id="artifact-rooms" class="artifact-rooms hidden"><span class="eyebrow">SALAS ABERTAS NESTE ARTEFATO</span><div id="artifact-room-list" class="artifact-room-list"></div></div>
+          <details class="advanced"><summary>SERVIDOR</summary><label class="field"><span>ENDEREÇO WEBSOCKET</span><input id="server-url" spellcheck="false" /></label><small id="online-server-note">O servidor sobe junto com <code>npm run dev</code>, <code>npm run preview</code> e <code>npm start</code>.</small></details>
           <p id="online-status" class="online-status" aria-live="polite"></p>
         </div>
       </section>

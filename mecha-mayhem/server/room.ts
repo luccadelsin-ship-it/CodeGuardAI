@@ -112,7 +112,8 @@ export class Room {
     }
     if (!asBot) {
       const seat = [...this.players.values()].find((p) => p.bot && (!team || p.team === team)) ?? [...this.players.values()].find((p) => p.bot);
-      if (seat && (this.players.size >= this.rules.maxPlayers || this.players.size >= BOT_FILL[this.mode])) this.leave(seat.id);
+      // A human takes a bot's seat; the swap must not end a running match (a duel briefly has one pilot).
+      if (seat && (this.players.size >= this.rules.maxPlayers || this.players.size >= BOT_FILL[this.mode])) this.leave(seat.id, true);
     }
     const spawn = this.pickSpawn(-1);
     const player: Player = {
@@ -132,10 +133,11 @@ export class Room {
     return player;
   }
 
-  leave(id: number): void {
+  leave(id: number, replaced = false): void {
     if (!this.players.delete(id)) return;
     this.missiles = this.missiles.filter((m) => m.owner !== id);
     this.broadcast({ t: 'leave', id });
+    if (replaced) return;
     if (this.players.size < 2 && this.phase === 'countdown') this.setPhase('waiting', 0);
     if (this.players.size < 2 && this.phase === 'playing') this.endMatch();
   }
