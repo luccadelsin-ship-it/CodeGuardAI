@@ -1,0 +1,1658 @@
+{
+  "title": "Mecha Mayhem — contrato de migração web -> Unreal Engine 5",
+  "generatedFrom": {
+    "branch": "claude/mecha-mayhem-improvements-7ouqch",
+    "commit": "1e356ea",
+    "date": "2026-11-06",
+    "how": "gerado importando os módulos TypeScript compartilhados (valores reais em execução, não copiados à mão)"
+  },
+  "units": {
+    "distance": "metros (Unreal: x100 uu)",
+    "time": "segundos",
+    "angles": "radianos",
+    "axes": "web Y para cima; game (x,y,z) = Blender (x,z,-y); Unreal Z para cima: unreal (X,Y,Z) = Blender (x,-y,z) * 100 (Unreal é left-handed; confira com o .blend)",
+    "yaw": "forward = (sin yaw, cos yaw) no plano XZ da web"
+  },
+  "simulation": {
+    "tickHz": 30,
+    "move": {
+      "radius": 0.8,
+      "walk": 6.1,
+      "sprint": 9.4,
+      "backwards": 0.82,
+      "groundAccel": 10,
+      "groundBrake": 13,
+      "airAccel": 2.6,
+      "gravity": 21,
+      "jump": 8.4,
+      "jetAccel": 34,
+      "jetMaxRise": 4.6,
+      "jetCost": 24,
+      "jetCeiling": 6.8,
+      "dashSpeed": 28,
+      "dashTime": 0.2,
+      "dashCooldown": 2.2,
+      "dashCost": 16,
+      "shieldTime": 4,
+      "shieldCooldown": 11,
+      "shieldCost": 25,
+      "energyRegen": 12,
+      "energyDelay": 0.65,
+      "heatDecay": 20,
+      "heatDecayIdle": 36,
+      "overheatRecover": 30,
+      "impactCooldown": 3.2,
+      "impactCost": 10,
+      "maxHealth": 100
+    },
+    "hitbox": {
+      "y0": 0.45,
+      "y1": 2.75,
+      "radius": 0.85,
+      "headY": 3.18,
+      "headRadius": 0.42
+    },
+    "note": "stepMech em src/shared/sim.ts roda igual no cliente (predição) e no servidor (autoritativo)"
+  },
+  "weapons": {
+    "defs": {
+      "mg": {
+        "id": "mg",
+        "slot": 1,
+        "name": "METRALHADORA",
+        "mark": "MK I",
+        "kind": "hitscan",
+        "description": "Rajada contínua de precisão. Acumula calor e abre a dispersão quando segurada.",
+        "damage": 8,
+        "minDamage": 8,
+        "pellets": 1,
+        "spread": 0.006,
+        "bloom": 0.0035,
+        "maxBloom": 0.035,
+        "interval": 0.1,
+        "range": 80,
+        "falloffStart": 45,
+        "falloffMin": 0.6,
+        "heat": 6.2,
+        "energy": 0,
+        "chargeTime": 0,
+        "minCharge": 0,
+        "projectileSpeed": 0,
+        "splashRadius": 0,
+        "splashDamage": 0,
+        "homing": 0,
+        "pierce": false,
+        "knockback": 0.15,
+        "recoil": 0.08,
+        "shake": 0.05,
+        "weight": 1,
+        "color": [
+          0.55,
+          0.95,
+          1
+        ],
+        "stats": {
+          "damage": 35,
+          "rate": 95,
+          "range": 75,
+          "control": 70
+        }
+      },
+      "shotgun": {
+        "id": "shotgun",
+        "slot": 2,
+        "name": "ESCOPETA",
+        "mark": "BREACHER",
+        "kind": "hitscan",
+        "description": "Dez projéteis em leque. Devastadora de perto, empurra e atordoa o alvo.",
+        "damage": 8.5,
+        "minDamage": 8.5,
+        "pellets": 10,
+        "spread": 0.085,
+        "bloom": 0,
+        "maxBloom": 0,
+        "interval": 0.82,
+        "range": 28,
+        "falloffStart": 7,
+        "falloffMin": 0.25,
+        "heat": 19,
+        "energy": 0,
+        "chargeTime": 0,
+        "minCharge": 0,
+        "projectileSpeed": 0,
+        "splashRadius": 0,
+        "splashDamage": 0,
+        "homing": 0,
+        "pierce": false,
+        "knockback": 3.2,
+        "recoil": 0.45,
+        "shake": 0.32,
+        "weight": 0.96,
+        "color": [
+          1,
+          0.72,
+          0.32
+        ],
+        "stats": {
+          "damage": 95,
+          "rate": 30,
+          "range": 25,
+          "control": 55
+        }
+      },
+      "laser": {
+        "id": "laser",
+        "slot": 3,
+        "name": "CANHÃO LASER",
+        "mark": "LANCE",
+        "kind": "charge",
+        "description": "Segure para carregar e solte. Feixe perfurante de longo alcance, consome energia.",
+        "damage": 105,
+        "minDamage": 26,
+        "pellets": 1,
+        "spread": 0,
+        "bloom": 0,
+        "maxBloom": 0,
+        "interval": 0.4,
+        "range": 140,
+        "falloffStart": 140,
+        "falloffMin": 1,
+        "heat": 0,
+        "energy": 24,
+        "chargeTime": 1.1,
+        "minCharge": 0.18,
+        "projectileSpeed": 0,
+        "splashRadius": 0,
+        "splashDamage": 0,
+        "homing": 0,
+        "pierce": true,
+        "knockback": 1.2,
+        "recoil": 0.3,
+        "shake": 0.22,
+        "weight": 0.72,
+        "color": [
+          1,
+          0.25,
+          0.85
+        ],
+        "stats": {
+          "damage": 90,
+          "rate": 25,
+          "range": 100,
+          "control": 85
+        }
+      },
+      "missile": {
+        "id": "missile",
+        "slot": 4,
+        "name": "MÍSSEIS",
+        "mark": "HORNET",
+        "kind": "projectile",
+        "description": "Mísseis teleguiados com dano em área. Trava no alvo mais próximo da mira.",
+        "damage": 26,
+        "minDamage": 26,
+        "pellets": 1,
+        "spread": 0.02,
+        "bloom": 0,
+        "maxBloom": 0,
+        "interval": 1.05,
+        "range": 90,
+        "falloffStart": 90,
+        "falloffMin": 1,
+        "heat": 26,
+        "energy": 0,
+        "chargeTime": 0,
+        "minCharge": 0,
+        "projectileSpeed": 31,
+        "splashRadius": 4.6,
+        "splashDamage": 38,
+        "homing": 2.6,
+        "pierce": false,
+        "knockback": 2.4,
+        "recoil": 0.35,
+        "shake": 0.25,
+        "weight": 0.9,
+        "color": [
+          1,
+          0.55,
+          0.15
+        ],
+        "stats": {
+          "damage": 80,
+          "rate": 35,
+          "range": 85,
+          "control": 90
+        }
+      },
+      "sword": {
+        "id": "sword",
+        "slot": 5,
+        "name": "ESPADA DE ENERGIA",
+        "mark": "ARC",
+        "kind": "melee",
+        "description": "Golpes em arco, combo de três ataques e uma breve defesa contra projéteis.",
+        "damage": 37,
+        "minDamage": 37,
+        "pellets": 1,
+        "spread": 0,
+        "bloom": 0,
+        "maxBloom": 0,
+        "interval": 0.42,
+        "range": 4.3,
+        "falloffStart": 4.3,
+        "falloffMin": 1,
+        "heat": 0,
+        "energy": 8,
+        "chargeTime": 0,
+        "minCharge": 0,
+        "projectileSpeed": 0,
+        "splashRadius": 0,
+        "splashDamage": 0,
+        "homing": 0,
+        "pierce": false,
+        "knockback": 2.4,
+        "recoil": 0.18,
+        "shake": 0.12,
+        "weight": 1.06,
+        "color": [
+          0.25,
+          0.85,
+          1
+        ],
+        "stats": {
+          "damage": 70,
+          "rate": 70,
+          "range": 8,
+          "control": 80
+        }
+      },
+      "hammer": {
+        "id": "hammer",
+        "slot": 6,
+        "name": "MARTELO MECÂNICO",
+        "mark": "QUAKE",
+        "kind": "melee",
+        "description": "Golpe pesado em arco com combo de dois ataques e onda de choque no chão.",
+        "damage": 70,
+        "minDamage": 70,
+        "pellets": 1,
+        "spread": 0,
+        "bloom": 0,
+        "maxBloom": 0,
+        "interval": 1.05,
+        "range": 3.7,
+        "falloffStart": 3.7,
+        "falloffMin": 1,
+        "heat": 0,
+        "energy": 18,
+        "chargeTime": 0,
+        "minCharge": 0,
+        "projectileSpeed": 0,
+        "splashRadius": 5.5,
+        "splashDamage": 26,
+        "homing": 0,
+        "pierce": false,
+        "knockback": 7,
+        "recoil": 0.42,
+        "shake": 0.36,
+        "weight": 0.82,
+        "color": [
+          1,
+          0.54,
+          0.17
+        ],
+        "stats": {
+          "damage": 100,
+          "rate": 25,
+          "range": 12,
+          "control": 45
+        }
+      }
+    },
+    "weight": {
+      "mg": 320,
+      "shotgun": 380,
+      "laser": 450,
+      "missile": 560,
+      "sword": 260,
+      "hammer": 640
+    },
+    "meleeContactSeconds": {
+      "sword": 0.15,
+      "hammer": 0.37
+    },
+    "meleeDurationSeconds": {
+      "sword": 0.42,
+      "hammer": 0.78
+    },
+    "keys": {
+      "J": "arma ativa (1-4: mg, shotgun, laser, missile)",
+      "K": "espada",
+      "L": "martelo"
+    }
+  },
+  "parts": {
+    "families": {
+      "scout": {
+        "id": "scout",
+        "name": "SCOUT",
+        "shape": "scout",
+        "accent": "#3d8bff",
+        "light": "#58deff",
+        "detail": "Reconhecimento leve e rápido",
+        "head": {
+          "weight": 180,
+          "support": 72,
+          "durability": 80,
+          "armor": 12
+        },
+        "torso": {
+          "weight": 780,
+          "support": 900,
+          "durability": 192,
+          "armor": 12,
+          "energy": 135
+        },
+        "legs": {
+          "weight": 620,
+          "support": 2400,
+          "durability": 152,
+          "armor": 12,
+          "speed": 8.2
+        }
+      },
+      "striker": {
+        "id": "striker",
+        "name": "STRIKER",
+        "shape": "striker",
+        "accent": "#e9743a",
+        "light": "#58deff",
+        "detail": "Equilíbrio entre proteção e mobilidade",
+        "head": {
+          "weight": 260,
+          "support": 104,
+          "durability": 100,
+          "armor": 20
+        },
+        "torso": {
+          "weight": 1150,
+          "support": 1250,
+          "durability": 240,
+          "armor": 20,
+          "energy": 120
+        },
+        "legs": {
+          "weight": 950,
+          "support": 3600,
+          "durability": 190,
+          "armor": 20,
+          "speed": 6.6
+        }
+      },
+      "titan": {
+        "id": "titan",
+        "name": "TITAN",
+        "shape": "titan",
+        "accent": "#f2c230",
+        "light": "#ffe08a",
+        "detail": "Blindagem pesada, lento",
+        "head": {
+          "weight": 580,
+          "support": 232,
+          "durability": 165,
+          "armor": 36
+        },
+        "torso": {
+          "weight": 2450,
+          "support": 2000,
+          "durability": 396,
+          "armor": 36,
+          "energy": 90
+        },
+        "legs": {
+          "weight": 1800,
+          "support": 6500,
+          "durability": 314,
+          "armor": 36,
+          "speed": 4.5
+        }
+      },
+      "phantom": {
+        "id": "phantom",
+        "name": "PHANTOM",
+        "shape": "scout",
+        "accent": "#7a4fd6",
+        "light": "#c06bff",
+        "detail": "Furtivo, leve, muita energia",
+        "head": {
+          "weight": 210,
+          "support": 84,
+          "durability": 85,
+          "armor": 14
+        },
+        "torso": {
+          "weight": 860,
+          "support": 1000,
+          "durability": 204,
+          "armor": 14,
+          "energy": 145
+        },
+        "legs": {
+          "weight": 690,
+          "support": 2600,
+          "durability": 162,
+          "armor": 14,
+          "speed": 7.8
+        }
+      },
+      "industrial": {
+        "id": "industrial",
+        "name": "INDUSTRIAL",
+        "shape": "titan",
+        "accent": "#ff8a1c",
+        "light": "#3ff0d0",
+        "detail": "Carga máxima, robusto",
+        "head": {
+          "weight": 460,
+          "support": 184,
+          "durability": 150,
+          "armor": 32
+        },
+        "torso": {
+          "weight": 2150,
+          "support": 2300,
+          "durability": 360,
+          "armor": 32,
+          "energy": 105
+        },
+        "legs": {
+          "weight": 1650,
+          "support": 7200,
+          "durability": 285,
+          "armor": 32,
+          "speed": 4.8
+        }
+      },
+      "spectre": {
+        "id": "spectre",
+        "name": "SPECTRE",
+        "shape": "striker",
+        "accent": "#c9f2ff",
+        "light": "#46e6ff",
+        "detail": "Bateria grande, médio",
+        "head": {
+          "weight": 290,
+          "support": 116,
+          "durability": 105,
+          "armor": 18
+        },
+        "torso": {
+          "weight": 1080,
+          "support": 1400,
+          "durability": 252,
+          "armor": 18,
+          "energy": 170
+        },
+        "legs": {
+          "weight": 880,
+          "support": 3400,
+          "durability": 200,
+          "armor": 18,
+          "speed": 6.8
+        }
+      },
+      "vanguard": {
+        "id": "vanguard",
+        "name": "VANGUARD",
+        "shape": "striker",
+        "accent": "#7f8f3a",
+        "light": "#5cf0c8",
+        "detail": "Linha de frente resistente",
+        "head": {
+          "weight": 340,
+          "support": 136,
+          "durability": 125,
+          "armor": 27
+        },
+        "torso": {
+          "weight": 1560,
+          "support": 1700,
+          "durability": 300,
+          "armor": 27,
+          "energy": 125
+        },
+        "legs": {
+          "weight": 1190,
+          "support": 4600,
+          "durability": 238,
+          "armor": 27,
+          "speed": 5.9
+        }
+      },
+      "ronin": {
+        "id": "ronin",
+        "name": "RONIN",
+        "shape": "scout",
+        "accent": "#c8262e",
+        "light": "#9fe4ff",
+        "detail": "Duelista ágil, bom com espada",
+        "head": {
+          "weight": 300,
+          "support": 120,
+          "durability": 110,
+          "armor": 22
+        },
+        "torso": {
+          "weight": 1240,
+          "support": 1450,
+          "durability": 264,
+          "armor": 22,
+          "energy": 130
+        },
+        "legs": {
+          "weight": 1020,
+          "support": 3800,
+          "durability": 209,
+          "armor": 22,
+          "speed": 7.1
+        }
+      },
+      "warden": {
+        "id": "warden",
+        "name": "WARDEN",
+        "shape": "titan",
+        "accent": "#2a3f7a",
+        "light": "#9ccbff",
+        "detail": "Guardião blindado",
+        "head": {
+          "weight": 520,
+          "support": 208,
+          "durability": 155,
+          "armor": 35
+        },
+        "torso": {
+          "weight": 2300,
+          "support": 2100,
+          "durability": 372,
+          "armor": 35,
+          "energy": 110
+        },
+        "legs": {
+          "weight": 1720,
+          "support": 6100,
+          "durability": 294,
+          "armor": 35,
+          "speed": 4.9
+        }
+      },
+      "tempest": {
+        "id": "tempest",
+        "name": "TEMPEST",
+        "shape": "scout",
+        "accent": "#1aa6a0",
+        "light": "#c8fbff",
+        "detail": "Assalto rápido",
+        "head": {
+          "weight": 250,
+          "support": 100,
+          "durability": 95,
+          "armor": 17
+        },
+        "torso": {
+          "weight": 980,
+          "support": 1100,
+          "durability": 228,
+          "armor": 17,
+          "energy": 155
+        },
+        "legs": {
+          "weight": 790,
+          "support": 3000,
+          "durability": 180,
+          "armor": 17,
+          "speed": 8
+        }
+      }
+    },
+    "defaultParts": {
+      "head": "striker",
+      "torso": "striker",
+      "legs": "striker"
+    },
+    "loadRules": {
+      "overloadStart": 1,
+      "overloadLimit": 1.35
+    },
+    "exampleLoadouts": {
+      "striker_mg": {
+        "weight": 2680,
+        "legsLoad": 1730,
+        "legsCapacity": 3600,
+        "torsoLoad": 580,
+        "torsoCapacity": 1250,
+        "load": 0.48055555555555557,
+        "overloaded": false,
+        "rejected": false,
+        "durability": 530,
+        "armor": 20,
+        "energyCapacity": 120,
+        "speed": 6.1,
+        "speedMul": 1,
+        "jumpMul": 1,
+        "energyCostMul": 1,
+        "energyRegenMul": 1,
+        "damageMul": 1,
+        "zones": {
+          "head": 45,
+          "torso": 120,
+          "leftArm": 55,
+          "rightArm": 55,
+          "leftLeg": 65,
+          "rightLeg": 65
+        }
+      },
+      "titan_hammer": {
+        "weight": 5470,
+        "legsLoad": 3670,
+        "legsCapacity": 6500,
+        "torsoLoad": 1220,
+        "torsoCapacity": 2000,
+        "load": 0.61,
+        "overloaded": false,
+        "rejected": false,
+        "durability": 875,
+        "armor": 36,
+        "energyCapacity": 90,
+        "speed": 4.7,
+        "speedMul": 0.7772727272727273,
+        "jumpMul": 1,
+        "energyCostMul": 1.1428571428571428,
+        "energyRegenMul": 0.9,
+        "damageMul": 0.6721449369136202,
+        "zones": {
+          "head": 74,
+          "torso": 198,
+          "leftArm": 91,
+          "rightArm": 91,
+          "leftLeg": 107,
+          "rightLeg": 107
+        }
+      },
+      "rejected_titan_on_scout_hammer": {
+        "weight": 4290,
+        "legsLoad": 3670,
+        "legsCapacity": 2400,
+        "torsoLoad": 1220,
+        "torsoCapacity": 2000,
+        "load": 1.5291666666666666,
+        "overloaded": true,
+        "rejected": true,
+        "durability": 713,
+        "armor": 29,
+        "energyCapacity": 90,
+        "speed": 3.9,
+        "speedMul": 0.6433333333333334,
+        "jumpMul": 0.6,
+        "energyCostMul": 2.0499999999999994,
+        "energyRegenMul": 0.9,
+        "damageMul": 0.8016090104585681,
+        "zones": {
+          "head": 74,
+          "torso": 198,
+          "leftArm": 91,
+          "rightArm": 91,
+          "leftLeg": 52,
+          "rightLeg": 52
+        }
+      }
+    }
+  },
+  "online": {
+    "protocolVersion": 8,
+    "authoritativeServer": true,
+    "modes": {
+      "ffa": {
+        "label": "MATA-MATA",
+        "maxPlayers": 6,
+        "fragLimit": 15,
+        "timeLimit": 360
+      },
+      "duel": {
+        "label": "DUELO 1V1",
+        "maxPlayers": 2,
+        "fragLimit": 7,
+        "timeLimit": 300
+      },
+      "team2": {
+        "label": "TIMES 2V2",
+        "maxPlayers": 4,
+        "fragLimit": 20,
+        "timeLimit": 360
+      },
+      "team5": {
+        "label": "TIMES 5V5",
+        "maxPlayers": 10,
+        "fragLimit": 50,
+        "timeLimit": 480
+      },
+      "core": {
+        "label": "CORE CONTROL",
+        "maxPlayers": 10,
+        "fragLimit": 100,
+        "timeLimit": 480
+      }
+    },
+    "botFill": {
+      "ffa": 4,
+      "duel": 2,
+      "team2": 4,
+      "team5": 10,
+      "core": 8
+    },
+    "core": {
+      "x": 0,
+      "z": 0,
+      "radius": 7,
+      "maxHeight": 1.1,
+      "captureTime": 3,
+      "pointsPerSecond": 2
+    },
+    "teams": [
+      "blue",
+      "orange"
+    ],
+    "friendlyFire": false
+  },
+  "training": {
+    "difficulties": {
+      "recruit": {
+        "label": "RECRUTA",
+        "damage": 0.45,
+        "health": 0.6,
+        "reaction": 1.65,
+        "lead": 0.15,
+        "error": 0.085,
+        "aggression": 0.55
+      },
+      "veteran": {
+        "label": "VETERANO",
+        "damage": 0.82,
+        "health": 0.9,
+        "reaction": 1.12,
+        "lead": 0.5,
+        "error": 0.045,
+        "aggression": 0.9
+      },
+      "elite": {
+        "label": "ELITE",
+        "damage": 1.35,
+        "health": 1.25,
+        "reaction": 0.78,
+        "lead": 0.9,
+        "error": 0.018,
+        "aggression": 1.3
+      }
+    },
+    "waves": 5,
+    "source": "src/game/drones.ts (ENEMY_DEFS, DIFFICULTIES), src/game/combat.ts (WAVES)"
+  },
+  "maps": {
+    "frozen": {
+      "name": "Frozen Outpost",
+      "label": "FROZEN OUTPOST",
+      "detail": "Base polar · arena clássica e pontes estreitas",
+      "layoutFile": "frozen_outpost.layout.json",
+      "color": "#70d8ff",
+      "deckY": 0.56,
+      "stepHeight": 0,
+      "coverCount": 23,
+      "jumpPads": [
+        {
+          "x": 22.41,
+          "z": 0,
+          "radius": 1.1,
+          "power": 14.5
+        },
+        {
+          "x": -22.41,
+          "z": 0,
+          "radius": 1.1,
+          "power": 14.5
+        },
+        {
+          "x": 0,
+          "z": -22.41,
+          "radius": 1.1,
+          "power": 14.5
+        },
+        {
+          "x": 0,
+          "z": 22.41,
+          "radius": 1.1,
+          "power": 14.5
+        }
+      ],
+      "spawnPoints": [
+        {
+          "x": 28.5,
+          "y": 0.56,
+          "z": -1.04,
+          "yaw": -1.5707963267948966
+        },
+        {
+          "x": 28.5,
+          "y": 0.56,
+          "z": 1.04,
+          "yaw": -1.5707963267948966
+        },
+        {
+          "x": -28.5,
+          "y": 0.56,
+          "z": 1.04,
+          "yaw": 1.5707963267948966
+        },
+        {
+          "x": -28.5,
+          "y": 0.56,
+          "z": -1.04,
+          "yaw": 1.5707963267948966
+        },
+        {
+          "x": -1.04,
+          "y": 0.56,
+          "z": -28.5,
+          "yaw": 0
+        },
+        {
+          "x": 1.04,
+          "y": 0.56,
+          "z": -28.5,
+          "yaw": 0
+        },
+        {
+          "x": 1.0400000000000003,
+          "y": 0.56,
+          "z": 28.5,
+          "yaw": -3.141592653589793
+        },
+        {
+          "x": -1.0399999999999998,
+          "y": 0.56,
+          "z": 28.5,
+          "yaw": -3.141592653589793
+        }
+      ],
+      "coreZone": {
+        "x": 0,
+        "z": 0,
+        "radius": 7,
+        "maxHeight": 1.1,
+        "captureTime": 3,
+        "pointsPerSecond": 2
+      }
+    },
+    "refinery": {
+      "name": "Refinaria",
+      "label": "REFINARIA",
+      "detail": "Plataformas industriais · cobertura e rotas de flanco",
+      "layoutFile": "refinery.layout.json",
+      "color": "#ff9a4b",
+      "deckY": 0.56,
+      "stepHeight": 0,
+      "coverCount": 20,
+      "jumpPads": [
+        {
+          "x": 22.41,
+          "z": 0,
+          "radius": 1.1,
+          "power": 14.5
+        },
+        {
+          "x": -22.41,
+          "z": 0,
+          "radius": 1.1,
+          "power": 14.5
+        },
+        {
+          "x": 0,
+          "z": -22.41,
+          "radius": 1.1,
+          "power": 14.5
+        },
+        {
+          "x": 0,
+          "z": 22.41,
+          "radius": 1.1,
+          "power": 14.5
+        }
+      ],
+      "spawnPoints": [
+        {
+          "x": 28.5,
+          "y": 0.56,
+          "z": -1.04,
+          "yaw": -1.5707963267948966
+        },
+        {
+          "x": 28.5,
+          "y": 0.56,
+          "z": 1.04,
+          "yaw": -1.5707963267948966
+        },
+        {
+          "x": -28.5,
+          "y": 0.56,
+          "z": 1.04,
+          "yaw": 1.5707963267948966
+        },
+        {
+          "x": -28.5,
+          "y": 0.56,
+          "z": -1.04,
+          "yaw": 1.5707963267948966
+        },
+        {
+          "x": -1.04,
+          "y": 0.56,
+          "z": -28.5,
+          "yaw": 0
+        },
+        {
+          "x": 1.04,
+          "y": 0.56,
+          "z": -28.5,
+          "yaw": 0
+        },
+        {
+          "x": 1.0400000000000003,
+          "y": 0.56,
+          "z": 28.5,
+          "yaw": -3.141592653589793
+        },
+        {
+          "x": -1.0399999999999998,
+          "y": 0.56,
+          "z": 28.5,
+          "yaw": -3.141592653589793
+        }
+      ],
+      "coreZone": {
+        "x": 0,
+        "z": 0,
+        "radius": 7,
+        "maxHeight": 1.1,
+        "captureTime": 3,
+        "pointsPerSecond": 2
+      }
+    },
+    "neon": {
+      "name": "Doca Neon",
+      "label": "DOCA NEON",
+      "detail": "Porto noturno · anel externo e corredores luminosos",
+      "layoutFile": "neon.layout.json",
+      "color": "#fa74ff",
+      "deckY": 0.56,
+      "stepHeight": 0,
+      "coverCount": 24,
+      "jumpPads": [
+        {
+          "x": 22.41,
+          "z": 0,
+          "radius": 1.1,
+          "power": 14.5
+        },
+        {
+          "x": -22.41,
+          "z": 0,
+          "radius": 1.1,
+          "power": 14.5
+        },
+        {
+          "x": 0,
+          "z": -22.41,
+          "radius": 1.1,
+          "power": 14.5
+        },
+        {
+          "x": 0,
+          "z": 22.41,
+          "radius": 1.1,
+          "power": 14.5
+        }
+      ],
+      "spawnPoints": [
+        {
+          "x": 28.5,
+          "y": 0.56,
+          "z": -1.04,
+          "yaw": -1.5707963267948966
+        },
+        {
+          "x": 28.5,
+          "y": 0.56,
+          "z": 1.04,
+          "yaw": -1.5707963267948966
+        },
+        {
+          "x": -28.5,
+          "y": 0.56,
+          "z": 1.04,
+          "yaw": 1.5707963267948966
+        },
+        {
+          "x": -28.5,
+          "y": 0.56,
+          "z": -1.04,
+          "yaw": 1.5707963267948966
+        },
+        {
+          "x": -1.04,
+          "y": 0.56,
+          "z": -28.5,
+          "yaw": 0
+        },
+        {
+          "x": 1.04,
+          "y": 0.56,
+          "z": -28.5,
+          "yaw": 0
+        },
+        {
+          "x": 1.0400000000000003,
+          "y": 0.56,
+          "z": 28.5,
+          "yaw": -3.141592653589793
+        },
+        {
+          "x": -1.0399999999999998,
+          "y": 0.56,
+          "z": 28.5,
+          "yaw": -3.141592653589793
+        },
+        {
+          "x": 24.796051224213834,
+          "y": 0.56,
+          "z": 23.325269119345812,
+          "yaw": -2.356194490192345
+        },
+        {
+          "x": 23.325269119345812,
+          "y": 0.56,
+          "z": 24.796051224213834,
+          "yaw": -2.356194490192345
+        },
+        {
+          "x": -24.796051224213834,
+          "y": 0.56,
+          "z": -23.325269119345812,
+          "yaw": 0.7853981633974483
+        },
+        {
+          "x": -23.325269119345812,
+          "y": 0.56,
+          "z": -24.796051224213834,
+          "yaw": 0.7853981633974483
+        },
+        {
+          "x": 23.325269119345812,
+          "y": 0.56,
+          "z": -24.796051224213834,
+          "yaw": -0.7853981633974483
+        },
+        {
+          "x": 24.796051224213834,
+          "y": 0.56,
+          "z": -23.325269119345812,
+          "yaw": -0.7853981633974483
+        },
+        {
+          "x": -23.325269119345812,
+          "y": 0.56,
+          "z": 24.796051224213834,
+          "yaw": 2.356194490192345
+        },
+        {
+          "x": -24.796051224213834,
+          "y": 0.56,
+          "z": 23.325269119345812,
+          "yaw": 2.356194490192345
+        }
+      ],
+      "coreZone": {
+        "x": 0,
+        "z": 0,
+        "radius": 7,
+        "maxHeight": 1.1,
+        "captureTime": 3,
+        "pointsPerSecond": 2
+      }
+    },
+    "canyon": {
+      "name": "Fundição do Cânion",
+      "label": "FUNDIÇÃO DO CÂNION",
+      "detail": "Deserto industrial · passarelas amplas e blocos de minério",
+      "layoutFile": "canyon.layout.json",
+      "color": "#efc47c",
+      "deckY": 0.56,
+      "stepHeight": 0,
+      "coverCount": 21,
+      "jumpPads": [
+        {
+          "x": 22.41,
+          "z": 0,
+          "radius": 1.1,
+          "power": 14.5
+        },
+        {
+          "x": -22.41,
+          "z": 0,
+          "radius": 1.1,
+          "power": 14.5
+        },
+        {
+          "x": 0,
+          "z": -22.41,
+          "radius": 1.1,
+          "power": 14.5
+        },
+        {
+          "x": 0,
+          "z": 22.41,
+          "radius": 1.1,
+          "power": 14.5
+        }
+      ],
+      "spawnPoints": [
+        {
+          "x": 28.5,
+          "y": 0.56,
+          "z": -1.04,
+          "yaw": -1.5707963267948966
+        },
+        {
+          "x": 28.5,
+          "y": 0.56,
+          "z": 1.04,
+          "yaw": -1.5707963267948966
+        },
+        {
+          "x": -28.5,
+          "y": 0.56,
+          "z": 1.04,
+          "yaw": 1.5707963267948966
+        },
+        {
+          "x": -28.5,
+          "y": 0.56,
+          "z": -1.04,
+          "yaw": 1.5707963267948966
+        },
+        {
+          "x": -1.04,
+          "y": 0.56,
+          "z": -28.5,
+          "yaw": 0
+        },
+        {
+          "x": 1.04,
+          "y": 0.56,
+          "z": -28.5,
+          "yaw": 0
+        },
+        {
+          "x": 1.0400000000000003,
+          "y": 0.56,
+          "z": 28.5,
+          "yaw": -3.141592653589793
+        },
+        {
+          "x": -1.0399999999999998,
+          "y": 0.56,
+          "z": 28.5,
+          "yaw": -3.141592653589793
+        }
+      ],
+      "coreZone": {
+        "x": 0,
+        "z": 0,
+        "radius": 7,
+        "maxHeight": 1.1,
+        "captureTime": 3,
+        "pointsPerSecond": 2
+      }
+    },
+    "scrapyard": {
+      "name": "Ferro-Velho Titã",
+      "label": "FERRO-VELHO TITÃ",
+      "detail": "Pátio de sucata · torres com escada, guindaste e reator central",
+      "layoutFile": "scrapyard.layout.json",
+      "color": "#f0a43c",
+      "deckY": 0,
+      "stepHeight": 0.45,
+      "coverCount": 88,
+      "jumpPads": [
+        {
+          "x": -19,
+          "z": 0,
+          "radius": 1.1,
+          "power": 14.5
+        },
+        {
+          "x": 19,
+          "z": 0,
+          "radius": 1.1,
+          "power": 14.5
+        },
+        {
+          "x": 0,
+          "z": -12,
+          "radius": 1.1,
+          "power": 14.5
+        },
+        {
+          "x": 0,
+          "z": 12,
+          "radius": 1.1,
+          "power": 14.5
+        }
+      ],
+      "spawnPoints": [
+        {
+          "x": -31.5,
+          "y": 0,
+          "z": 0,
+          "yaw": 1.57
+        },
+        {
+          "x": -31.5,
+          "y": 0,
+          "z": -3,
+          "yaw": 1.57
+        },
+        {
+          "x": -31.5,
+          "y": 0,
+          "z": 3,
+          "yaw": 1.57
+        },
+        {
+          "x": -27.5,
+          "y": 0,
+          "z": -2,
+          "yaw": 1.57
+        },
+        {
+          "x": -27.5,
+          "y": 0,
+          "z": 2,
+          "yaw": 1.57
+        },
+        {
+          "x": -34,
+          "y": 0,
+          "z": 2.5,
+          "yaw": 1.57
+        },
+        {
+          "x": 31.5,
+          "y": 0,
+          "z": 0,
+          "yaw": -1.57
+        },
+        {
+          "x": 31.5,
+          "y": 0,
+          "z": -3,
+          "yaw": -1.57
+        },
+        {
+          "x": 31.5,
+          "y": 0,
+          "z": 3,
+          "yaw": -1.57
+        },
+        {
+          "x": 27.5,
+          "y": 0,
+          "z": -2,
+          "yaw": -1.57
+        },
+        {
+          "x": 27.5,
+          "y": 0,
+          "z": 2,
+          "yaw": -1.57
+        },
+        {
+          "x": 34,
+          "y": 0,
+          "z": 2.5,
+          "yaw": -1.57
+        }
+      ],
+      "coreZone": {
+        "x": 0,
+        "z": 0,
+        "radius": 7,
+        "maxHeight": 1.1,
+        "captureTime": 3,
+        "pointsPerSecond": 2
+      }
+    }
+  },
+  "mapCover": {
+    "frozen": [
+      {
+        "x": 4.5,
+        "z": 5,
+        "widthX": 2.7,
+        "widthZ": 0.6,
+        "height": 1.35,
+        "kind": "barricade"
+      },
+      {
+        "x": -4.5,
+        "z": -5,
+        "widthX": 2.7,
+        "widthZ": 0.6,
+        "height": 1.35,
+        "kind": "barricade"
+      },
+      {
+        "x": 5,
+        "z": -4.5,
+        "widthX": 0.6,
+        "widthZ": 2.7,
+        "height": 1.35,
+        "kind": "barricade"
+      },
+      {
+        "x": -5,
+        "z": 4.5,
+        "widthX": 0.6,
+        "widthZ": 2.7,
+        "height": 1.35,
+        "kind": "barricade"
+      },
+      {
+        "x": 15.5,
+        "z": 1.45,
+        "widthX": 1.3,
+        "widthZ": 1.3,
+        "height": 1.15,
+        "kind": "block"
+      },
+      {
+        "x": -15.5,
+        "z": -1.45,
+        "widthX": 1.3,
+        "widthZ": 1.3,
+        "height": 1.15,
+        "kind": "block"
+      },
+      {
+        "x": -1.45,
+        "z": -15.5,
+        "widthX": 1.3,
+        "widthZ": 1.3,
+        "height": 1.15,
+        "kind": "block"
+      },
+      {
+        "x": 1.45,
+        "z": 15.5,
+        "widthX": 1.3,
+        "widthZ": 1.3,
+        "height": 1.15,
+        "kind": "block"
+      }
+    ],
+    "refinery": [
+      {
+        "x": 0,
+        "z": 0,
+        "widthX": 2.2,
+        "widthZ": 2.2,
+        "height": 3.2,
+        "kind": "pillar"
+      },
+      {
+        "x": 0,
+        "z": 5.6,
+        "widthX": 3.8,
+        "widthZ": 0.7,
+        "height": 0.95,
+        "kind": "pipe"
+      },
+      {
+        "x": 0,
+        "z": -5.6,
+        "widthX": 3.8,
+        "widthZ": 0.7,
+        "height": 0.95,
+        "kind": "pipe"
+      },
+      {
+        "x": 5.6,
+        "z": 0,
+        "widthX": 0.7,
+        "widthZ": 3.8,
+        "height": 0.95,
+        "kind": "pipe"
+      },
+      {
+        "x": -5.6,
+        "z": 0,
+        "widthX": 0.7,
+        "widthZ": 3.8,
+        "height": 0.95,
+        "kind": "pipe"
+      }
+    ],
+    "neon": [
+      {
+        "x": 0,
+        "z": 0,
+        "widthX": 5.6,
+        "widthZ": 5.6,
+        "height": 1,
+        "kind": "dais"
+      },
+      {
+        "x": 6.4,
+        "z": 6.4,
+        "widthX": 3.2,
+        "widthZ": 0.5,
+        "height": 2.4,
+        "kind": "wall"
+      },
+      {
+        "x": -6.4,
+        "z": -6.4,
+        "widthX": 3.2,
+        "widthZ": 0.5,
+        "height": 2.4,
+        "kind": "wall"
+      },
+      {
+        "x": 6.4,
+        "z": -6.4,
+        "widthX": 0.5,
+        "widthZ": 3.2,
+        "height": 2.4,
+        "kind": "wall"
+      },
+      {
+        "x": -6.4,
+        "z": 6.4,
+        "widthX": 0.5,
+        "widthZ": 3.2,
+        "height": 2.4,
+        "kind": "wall"
+      }
+    ],
+    "canyon": [
+      {
+        "x": 4.2,
+        "z": 6.2,
+        "widthX": 1.9,
+        "widthZ": 1.9,
+        "height": 1.7,
+        "kind": "ore"
+      },
+      {
+        "x": 5.9,
+        "z": 4.2,
+        "widthX": 1.4,
+        "widthZ": 1.4,
+        "height": 0.75,
+        "kind": "ore"
+      },
+      {
+        "x": -6.6,
+        "z": 3.1,
+        "widthX": 2.4,
+        "widthZ": 1.5,
+        "height": 1.05,
+        "kind": "ore"
+      },
+      {
+        "x": -3.4,
+        "z": -6.8,
+        "widthX": 1.7,
+        "widthZ": 2.5,
+        "height": 2.1,
+        "kind": "ore"
+      },
+      {
+        "x": -1.7,
+        "z": -5.1,
+        "widthX": 1.2,
+        "widthZ": 1.2,
+        "height": 0.9,
+        "kind": "ore"
+      },
+      {
+        "x": 7.1,
+        "z": -3.3,
+        "widthX": 1.5,
+        "widthZ": 1.5,
+        "height": 1.2,
+        "kind": "ore"
+      }
+    ],
+    "scrapyard": []
+  },
+  "testsExecuted": {
+    "smokeFullRun": {
+      "command": "npm run smoke",
+      "commitBefore": "estado do commit 9328d63 (lote de mapas), antes do online do artefato",
+      "result": "94 PASS / 0 FAIL",
+      "note": "numa rodada anterior o teste do míssil falhou uma vez (instável, depende da ordem dos inimigos); a rodada listada passou inteira",
+      "checks": [
+        "PASS  espada: arco rejeita alvo atrás e aceita alvo próximo",
+        "PASS  espada: golpe gasta energia e abre defesa",
+        "PASS  espada: defesa bloqueia projétil durante golpe",
+        "PASS  dano localizado: perna quebrada reduz deslocamento",
+        "PASS  dano localizado: braço da arma quebrado impede tiro",
+        "PASS  dano localizado: raio distingue cabeça e perna",
+        "PASS  online: dano da espada só no instante do contato (sincronizado com a animação)",
+        "PASS  online: espada valida alcance, energia e cadência no servidor",
+        "PASS  online: espada não atinge alvo fora do alcance",
+        "PASS  online: sala pública solo recebe bots do servidor",
+        "PASS  online: humano substitui um bot (vaga não fica presa)",
+        "PASS  times 5v5: bots completam equipes equilibradas",
+        "PASS  bots: navegam pelo mapa sem travar  — 8/9 se moveram · máx. travamentos 0",
+        "PASS  times: equilíbrio e sem fogo amigo",
+        "PASS  Core Control: servidor atribui pontos ao time no centro",
+        "PASS  Core Control: jato acima do núcleo não pontua",
+        "PASS  resultado: equipe vencedora inteira recebe vitória; empate reconhecido",
+        "PASS  correção: laser não carrega nem dispara com braço destruído",
+        "PASS  correção: reparo restaura membros e arma",
+        "PASS  peças: leve é mais rápido, pesado recebe menos dano  — leve 7.1 m/s · pesado 4.7 m/s",
+        "PASS  peças: sobrecarga acima de 135% é rejeitada pelo servidor",
+        "PASS  peças: atributos aplicados na simulação compartilhada",
+        "PASS  peças: peso da arma entra na carga",
+        "PASS  mapas: plataforma de salto lança o mecha (regra compartilhada)  — altura 3.8 m",
+        "PASS  mapas: pontes dos mapas procedurais têm cobertura",
+        "PASS  mapas: cada arena tem coberturas centrais próprias",
+        "PASS  ferro-velho: 88 volumes de colisão do Blender e 12 nascimentos livres",
+        "PASS  ferro-velho: escada da torre sobe andando até a plataforma  — altura 6.45 m",
+        "PASS  ferro-velho: contêiner girado bloqueia o mecha  — parou em z 15.23",
+        "PASS  ferro-velho: contêiner bloqueia linha de visão; pátio aberto não",
+        "PASS  ferro-velho: outros mapas sem degrau automático",
+        "PASS  ferro-velho: bots do servidor navegam no pátio  — 9/9 se moveram",
+        "PASS  segundo mapa: layout de refinaria tem pontes e coberturas",
+        "PASS  qualidade Mínima (sem placa de vídeo) disponível e salva",
+        "PASS  treino: dificuldade inicial Recruta",
+        "PASS  lobby: cinco arenas e preparação da missão",
+        "PASS  oficina: peso, sustentação, integridade, blindagem, energia e velocidade visíveis fora das imagens",
+        "PASS  oficina: sobrecarga acima do limite bloqueia a partida",
+        "PASS  oficina: peças aplicadas e salvas",
+        "PASS  oficina: volta para o lobby",
+        "PASS  menu: troca de clima",
+        "PASS  garagem: escolha de arma salva",
+        "PASS  dicas para iniciantes aparecem e avançam com as ações  — DICA 2/6",
+        "PASS  treino: movimento, dash, escudo e jato  — pos 0, 3.31, 12.45 · energia 42",
+        "PASS  treino: onda 1 gerou inimigos com IA  — sentinel:engage sentinel:engage wasp:engage",
+        "PASS  arma mg: troca pelo teclado e causa dano  — METRALHADORA MK I · +300 pts",
+        "PASS  arma shotgun: troca pelo teclado e causa dano  — ESCOPETA BREACHER · +685 pts",
+        "PASS  arma laser: troca pelo teclado e causa dano  — CANHÃO LASER LANCE · +1755 pts",
+        "PASS  arma missile: troca pelo teclado e causa dano  — MÍSSEIS HORNET · +1609 pts",
+        "PASS  arma sword: ataque direto pelo teclado  — +37 pts",
+        "PASS  arma hammer: ataque direto pelo teclado  — +370 pts",
+        "PASS  combate: abates registrados  — abates 7",
+        "PASS  ritmo: 5 ondas até a vitória e tela de resultado  — onda máx 5 · VITÓRIA",
+        "PASS  chefe Colosso aparece na onda final",
+        "PASS  reinício após resultado",
+        "PASS  progressão: partida concluída dá XP, créditos e nível do passe  — XP 2019 · 712 CR",
+        "PASS  loja: compra com créditos do jogo e equipa o efeito",
+        "PASS  editor: peças colocadas e mapa salvo (início protegido)  — 2 peças · 1 salto",
+        "PASS  editor: código de compartilhamento gerado",
+        "PASS  editor: mapa criado carrega no treino com as peças do jogador",
+        "PASS  robôs novos: Bastião bloqueia de frente e leva dano por trás  — frente 6 · costas 40",
+        "PASS  robôs novos: Reparador conserta aliados",
+        "PASS  robôs novos: Morteiro, Bastião e Reparador entram em combate  — sentinel,bulwark,medic,mortar,sentinel,wasp",
+        "PASS  história: 5 capítulos, só o primeiro liberado no começo  — 5 capítulos · 4 bloqueados",
+        "PASS  história: capítulo 1 abre com as ondas próprias  — capítulo 1 · 2 ondas",
+        "PASS  história: vencer o capítulo 1 libera o capítulo 2  — +858 XP+267 CRÉDITOSNÍVEL 4!PASSE NÍVEL 3 · RESGATE NO MENUCAPÍTULO 1 CONCLUÍDO ",
+        "PASS  celular: menu cabe em 390×844",
+        "PASS  celular: lobby cabe em 390×844 e permite rolagem",
+        "PASS  celular: garagem deixa o robô visível (painel na metade de baixo)  — painel começa em 354px",
+        "PASS  celular: título e botão da garagem em uma linha  — título 25px · botão 21px",
+        "PASS  celular: controles de toque visíveis",
+        "PASS  celular: botões e HUD sem sobreposição em 390×844",
+        "PASS  toque: joystick move o Striker  — pos 0, 0.56, 6.54",
+        "PASS  toque: botão ARMA troca a arma  — laser → missile",
+        "PASS  toque: botão DASH aciona o dash  — recarga 2.13 s",
+        "PASS  toque: botão FOGO dispara  — +908 pts · calor 43%",
+        "PASS  online ffa: conecta, enche a sala com bots e a partida começa  — 4 pilotos · playing · 14 acertos",
+        "PASS  online duel: conecta, enche a sala com bots e a partida começa  — 2 pilotos · playing · 3 acertos",
+        "PASS  online team2: conecta, enche a sala com bots e a partida começa  — 4 pilotos · playing · 25 acertos",
+        "PASS  online team5: conecta, enche a sala com bots e a partida começa  — 10 pilotos · playing · 78 acertos",
+        "PASS  online core: conecta, enche a sala com bots e a partida começa  — 8 pilotos · playing · 50 acertos",
+        "PASS  online core@scrapyard: conecta, enche a sala com bots e a partida começa  — 8 pilotos · playing · 61 acertos",
+        "PASS  online: bots combatem nos modos com vários pilotos  — ffa 14 · duel 3 · team2 25 · team5 78 · core 50 · core@scrapyard 61",
+        "PASS  online: jogador parado perde a proteção e o bot do duelo o enfrenta  — 1 acertos",
+        "PASS  online: sala privada, dois pilotos se enxergam  — sala 246N · fase playing",
+        "PASS  online: dano validado pelo servidor chega ao oponente  — vida de BRAVO 92 · ALFA 15.79,1.71,1.04 · BRAVO -15.62,1.71,-1.04",
+        "PASS  refinaria: mapa 3D procedural carrega  — 37 peças",
+        "PASS  mapa neon: cenário e lobby carregam  — 49 peças",
+        "PASS  mapa neon: missão inicia com jogador em plataforma",
+        "PASS  mapa canyon: cenário e lobby carregam  — 39 peças",
+        "PASS  mapa canyon: missão inicia com jogador em plataforma",
+        "PASS  ferro-velho: troca de mapa no lobby carrega a cena detalhada do Blender  — 15 malhas · 107567 vértices",
+        "PASS  ferro-velho: no navegador o contêiner bloqueia o jogador  — z 15.23",
+        "PASS  sem erros de console/página"
+      ]
+    },
+    "afterThatNotRerun": [
+      "online do artefato (net/artifactRoom.ts) e correção de troca bot->humano em server/room.ts: testados só com simulador local de duas abas (movimento sincronizou, dano 100->79, saída do anfitrião fecha o convidado); smoke completo não foi rodado depois"
+    ],
+    "notExecuted": [
+      "nada foi testado em Unreal",
+      "artefato publicado não foi aberto num navegador logado",
+      "sem teste em GPU real"
+    ]
+  }
+}
